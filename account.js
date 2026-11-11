@@ -189,6 +189,7 @@
     $('#hero-admin-link').hidden = !isAdmin;
     $('#admin-nav-link').hidden = !isAdmin;
     $('#profile-form').elements.email.value = user.email;
+    if ($('#password-form').elements.username) $('#password-form').elements.username.value = user.email;
     renderOverview(user, orders);
     renderOrders(orders);
     renderFavorites();

@@ -98,6 +98,7 @@
               <h3>Segurança</h3>
               <p>Troque sua senha periodicamente. Nesta demo, tudo é armazenado localmente no navegador.</p>
               <form class="account-form-grid" id="password-form" novalidate>
+                <input type="email" name="username" autocomplete="username" hidden aria-hidden="true" tabindex="-1">
                 <label class="span-2">SENHA ATUAL<input type="password" name="current" autocomplete="current-password" required></label>
                 <label>NOVA SENHA<input type="password" name="next" autocomplete="new-password" minlength="6" required></label>
                 <label>CONFIRMAR NOVA SENHA<input type="password" name="confirm" autocomplete="new-password" minlength="6" required></label>

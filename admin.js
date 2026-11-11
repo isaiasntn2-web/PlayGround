@@ -806,9 +806,9 @@
             <div class="settings-card">
               <div class="settings-card-head"><h3>Adicionar administrador</h3><p>CRIE UM NOVO ACESSO AO PAINEL.</p></div>
               <form class="add-admin-form" id="add-admin-form">
-                <input name="name" placeholder="Nome completo" required maxlength="60">
-                <input name="email" type="email" placeholder="email@rua98.com" required>
-                <input name="password" type="password" placeholder="Senha (mín. 6 caracteres)" minlength="6" required>
+                <input name="name" placeholder="Nome completo" autocomplete="name" required maxlength="60">
+                <input name="email" type="email" placeholder="email@rua98.com" autocomplete="email" required>
+                <input name="password" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password" minlength="6" required>
                 <button class="admin-button" type="submit">CRIAR ACESSO ADMIN <span>↗</span></button>
                 <span class="settings-message" id="add-admin-message" hidden></span>
               </form>
