@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f0e9">
+  <meta name="description" content="Sua conta RUA 98: pedidos, favoritos e dados pessoais.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23171816'/%3E%3Ctext x='7' y='45' font-size='34' font-family='Arial' font-weight='700' fill='%23e44d32'%3ER98%3C/text%3E%3C/svg%3E">
+  <title>Minha conta — RUA 98</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="extras.css">
+</head>
+<body class="account-page">
+  <div class="announcement"><span>FRETE GRÁTIS A PARTIR DE R$ 299</span><span class="announcement-dot">✳</span><span>10% OFF NA PRIMEIRA COMPRA · USE RUA10</span></div>
+  <header class="site-header">
+    <a class="wordmark" href="index.html" aria-label="RUA 98 início">RUA<span>98</span><i>®</i></a>
+    <nav class="main-nav" aria-label="Navegação"><a href="index.html#colecao">CAMISETAS</a><a href="index.html#manifesto">NOSSA RUA</a><a href="conta.html">MINHA CONTA</a></nav>
+    <div class="header-actions">
+      <a class="account-header-link" href="index.html#colecao">LOJA ↗</a>
+    </div>
+  </header>
+
+  <main class="account-shell">
+    <section class="account-guest" id="account-guest" hidden>
+      <div class="account-guest-card">
+        <span class="eyebrow"><span class="eyebrow-line"></span> ÁREA DO CLIENTE</span>
+        <h1>SUA RUA.<br><span>SUA CONTA.</span></h1>
+        <p>Entre para acompanhar pedidos, guardar suas peças favoritas e finalizar compras com mais agilidade.</p>
+        <div class="account-guest-actions">
+          <button class="button button-dark" type="button" id="guest-login">ENTRAR NA CONTA <span>↗</span></button>
+          <button class="button" type="button" id="guest-register">CRIAR CONTA</button>
+        </div>
+        <div class="account-admin-note">É da equipe? <a href="admin.html">Acesse o painel administrativo</a>.<br>Ambiente demonstrativo: contas e dados ficam neste navegador.</div>
+      </div>
+    </section>
+
+    <div id="account-app" hidden>
+      <section class="account-hero">
+        <div class="account-hero-inner">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> MINHA CONTA · RUA 98</div>
+            <h1>SUA RUA,<br><span>SUAS REGRAS.</span></h1>
+            <p id="hero-greeting">Tudo o que é seu, no mesmo lugar: pedidos, peças salvas e seus dados.</p>
+          </div>
+          <div class="account-identity">
+            <div class="account-avatar-lg" id="hero-avatar">R</div>
+            <div class="account-identity-info">
+              <b id="hero-name">—</b>
+              <span id="hero-email">—</span>
+              <a id="hero-admin-link" href="admin.html" hidden>PAINEL ADM ↗</a>
+            </div>
+            <button class="account-logout-link" type="button" id="hero-logout">SAIR</button>
+          </div>
+        </div>
+        <div class="account-stats">
+          <div class="account-stat"><b id="stat-orders">0</b><span>PEDIDOS</span></div>
+          <div class="account-stat"><b id="stat-favorites">0</b><span>FAVORITOS</span></div>
+          <div class="account-stat"><b class="green" id="stat-spent">R$ 0</b><span>TOTAL GASTO</span></div>
+          <div class="account-stat"><b id="stat-since">2026</b><span>NA RUA DESDE</span></div>
+        </div>
+      </section>
+
+      <section class="account-main">
+        <nav class="account-nav" aria-label="Seções da conta">
+          <button type="button" data-pane="overview" class="active">VISÃO GERAL <span>01</span></button>
+          <button type="button" data-pane="orders">MEUS PEDIDOS <span id="nav-orders">0</span></button>
+          <button type="button" data-pane="favorites">FAVORITOS <span id="nav-favs">0</span></button>
+          <button type="button" data-pane="profile">MEUS DADOS <span>↗</span></button>
+          <a class="admin-nav-link" id="admin-nav-link" href="admin.html" hidden>PAINEL ADM ↗</a>
+        </nav>
+        <div class="account-content">
+          <div class="account-pane" data-pane="overview" id="pane-overview"></div>
+          <div class="account-pane" data-pane="orders" id="pane-orders" hidden></div>
+          <div class="account-pane" data-pane="favorites" id="pane-favorites" hidden></div>
+          <div class="account-pane" data-pane="profile" id="pane-profile" hidden>
+            <div class="account-pane-title"><div><h2>MEUS DADOS.</h2><p>MANTENHA SEU UNIFORME EM DIA.</p></div></div>
+            <div class="account-card">
+              <h3>Dados pessoais e entrega</h3>
+              <p>Essas informações agilizam o checkout. Seu e-mail de acesso não pode ser alterado nesta demonstração.</p>
+              <form class="account-form-grid" id="profile-form" novalidate>
+                <label>NOME<input name="name" autocomplete="name" required></label>
+                <label>E-MAIL<input name="email" disabled></label>
+                <label>TELEFONE<input name="phone" autocomplete="tel" placeholder="(11) 99999-9999"></label>
+                <label>CEP<input name="zip" autocomplete="postal-code" placeholder="00000-000"></label>
+                <label class="span-2">ENDEREÇO<input name="address" autocomplete="street-address" placeholder="Rua, avenida, número"></label>
+                <label>CIDADE<input name="city" autocomplete="address-level2"></label>
+                <label>ESTADO<input name="state" maxlength="2" autocomplete="address-level1" placeholder="SP"></label>
+                <div class="account-card-actions span-2">
+                  <button class="button button-dark" type="submit">SALVAR DADOS <span>↗</span></button>
+                  <span class="account-inline-message" id="profile-message" hidden></span>
+                </div>
+              </form>
+            </div>
+            <div class="account-card">
+              <h3>Segurança</h3>
+              <p>Troque sua senha periodicamente. Nesta demo, tudo é armazenado localmente no navegador.</p>
+              <form class="account-form-grid" id="password-form" novalidate>
+                <input type="email" name="username" autocomplete="username" hidden aria-hidden="true" tabindex="-1">
+                <label class="span-2">SENHA ATUAL<input type="password" name="current" autocomplete="current-password" required></label>
+                <label>NOVA SENHA<input type="password" name="next" autocomplete="new-password" minlength="6" required></label>
+                <label>CONFIRMAR NOVA SENHA<input type="password" name="confirm" autocomplete="new-password" minlength="6" required></label>
+                <div class="account-card-actions span-2">
+                  <button class="button" type="submit">ALTERAR SENHA <span>↗</span></button>
+                  <span class="account-inline-message" id="password-message" hidden></span>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-top">
+      <a class="wordmark footer-logo" href="index.html">RUA<span>98</span><i>®</i></a>
+      <p>VISTA SUA PRÓPRIA REGRA.<br>DESDE ’98.</p>
+      <div class="social-links"><a href="index.html" aria-label="Voltar à loja">LOJA ↗</a><a href="admin.html" aria-label="Painel administrativo">ADM ↗</a></div>
+    </div>
+    <div class="footer-bottom"><span>© 2026 RUA 98 — FEITO NO BRASIL.</span><div><a href="index.html">TROCAS & DEVOLUÇÕES</a><a href="index.html">PRIVACIDADE</a></div><span>SP · BRASIL</span></div>
+  </footer>
+
+  <div class="toast" role="status" aria-live="polite"></div>
+  <script src="store.js"></script>
+  <script src="auth-ui.js"></script>
+  <script src="account.js"></script>
+</body>
+</html>
