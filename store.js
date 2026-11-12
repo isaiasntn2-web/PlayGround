@@ -64,7 +64,18 @@
       heroEyebrow: 'DROP 01 — OUTONO / INVERNO 26',
       instagram: 'https://instagram.com',
       whatsapp: '',
-      checkoutNote: 'PAGAMENTO SEGURO · AMBIENTE DEMONSTRATIVO'
+      checkoutNote: 'PAGAMENTO SEGURO · AMBIENTE DEMONSTRATIVO',
+      coupons: [
+        {
+          code: 'RUA10',
+          type: 'percent',
+          value: 10,
+          label: '10% OFF NA PRIMEIRA COMPRA',
+          active: true,
+          minSubtotal: 0,
+          oncePerUser: true
+        }
+      ]
     };
   }
 
@@ -178,9 +189,38 @@
       ],
       users,
       orders: seedOrders(),
+      newsletter: [],
       settings: seedSettings(),
       createdAt: '2026-09-01T12:00:00.000Z'
     };
+  }
+
+  function ensureShape(data = db) {
+    let changed = false;
+    if (!Array.isArray(data.newsletter)) {
+      data.newsletter = [];
+      changed = true;
+    }
+    if (!Array.isArray(data.settings.coupons) || !data.settings.coupons.length) {
+      data.settings.coupons = seedSettings().coupons;
+      changed = true;
+    }
+    if (!Array.isArray(data.orders)) {
+      data.orders = [];
+      changed = true;
+    }
+    data.orders.forEach(order => {
+      if (order.discount === undefined) {
+        order.discount = 0;
+        changed = true;
+      }
+      if (order.coupon === undefined) {
+        order.coupon = null;
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem(DB_KEY, JSON.stringify(data));
+    return data;
   }
 
   function persist() {
@@ -204,10 +244,10 @@
     readyPromise = (async () => {
       const stored = force ? null : readStoredDB();
       if (stored) {
-        db = stored;
+        db = ensureShape(stored);
         return db;
       }
-      db = await buildSeed();
+      db = ensureShape(await buildSeed());
       localStorage.setItem(DB_KEY, JSON.stringify(db));
       return db;
     })();
@@ -325,6 +365,50 @@
   function favoriteProducts() {
     const ids = new Set(activeFavorites());
     return db.products.filter(product => ids.has(product.id)).map(copy);
+  }
+
+  function findCoupon(code) {
+    const normalized = String(code || '').trim().toUpperCase();
+    if (!normalized) return null;
+    return (db.settings.coupons || []).find(coupon => coupon.code === normalized) || null;
+  }
+
+  function validateCoupon(code) {
+    const coupon = findCoupon(code);
+    if (!coupon || !coupon.active) throw new Error('Cupom inválido ou expirado.');
+    const user = currentUser();
+    if (!user) throw new Error('Entre na sua conta para usar cupons.');
+    if (coupon.oncePerUser && db.orders.some(order => order.userId === user.id && order.status !== 'cancelado' && order.coupon && order.coupon.code === coupon.code)) {
+      throw new Error('Este cupom já foi usado nesta conta.');
+    }
+    const cart = cartDetailed();
+    if (Number(coupon.minSubtotal) > 0 && cart.subtotal < Number(coupon.minSubtotal)) {
+      throw new Error(`Este cupom vale a partir de R$ ${Number(coupon.minSubtotal).toLocaleString('pt-BR')}.`);
+    }
+    if (!cart.lines.length) throw new Error('Sua sacola está vazia.');
+    return coupon;
+  }
+
+  function orderTotals(couponCode = '') {
+    const cart = cartDetailed();
+    let coupon = null;
+    let discount = 0;
+    if (couponCode) {
+      coupon = validateCoupon(couponCode);
+      discount = coupon.type === 'percent'
+        ? cart.subtotal * (Number(coupon.value) / 100)
+        : Number(coupon.value) || 0;
+      discount = Math.round(Math.min(cart.subtotal, Math.max(0, discount)) * 100) / 100;
+    }
+    const discountedSubtotal = Math.max(0, cart.subtotal - discount);
+    const shipping = cart.subtotal >= db.settings.freeShipping ? 0 : db.settings.shippingFee;
+    return {
+      ...cart,
+      discount,
+      coupon: coupon ? { code: coupon.code, label: coupon.label, type: coupon.type, value: coupon.value } : null,
+      shipping,
+      total: Math.round((discountedSubtotal + shipping) * 100) / 100
+    };
   }
 
   function orderNumber() {
@@ -578,6 +662,21 @@
       return cartDetailed();
     },
     clearCart() { writeCart([]); },
+    coupons() { return copy((db.settings.coupons || []).filter(coupon => coupon.active)); },
+    previewOrder(couponCode = '') { return copy(orderTotals(couponCode)); },
+
+    subscribeNewsletter(email) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) throw new Error('Informe um e-mail válido.');
+      const existing = db.newsletter.find(entry => entry.email === cleanEmail);
+      if (existing) return { already: true, coupon: 'RUA10' };
+      db.newsletter.push({ id: uid('n'), email: cleanEmail, createdAt: nowISO(), source: 'site' });
+      persist();
+      return { already: false, coupon: 'RUA10' };
+    },
+    newsletterSubscribers() {
+      return copy([...(db.newsletter || [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    },
 
     favorites() { return [...activeFavorites()]; },
     favoriteProducts,
@@ -603,25 +702,28 @@
       return { active: index < 0, favorites: [...record.favorites] };
     },
 
-    createOrder({ customer, payment }) {
+    createOrder({ customer, payment, couponCode = '' }) {
       const user = currentUser();
       if (!user) throw new Error('Entre na sua conta para finalizar a compra.');
-      const cart = cartDetailed();
-      if (!cart.lines.length) throw new Error('Sua sacola está vazia.');
-      for (const line of cart.lines) {
+      const totals = orderTotals(couponCode);
+      if (!totals.lines.length) throw new Error('Sua sacola está vazia.');
+      for (const line of totals.lines) {
         const product = db.products.find(entry => entry.id === line.productId);
         if (!product || !product.active) throw new Error(`${line.product.name} não está mais disponível.`);
         if (line.quantity > product.stock) throw new Error(`Estoque insuficiente para ${product.name}.`);
       }
-      const shipping = cart.subtotal >= db.settings.freeShipping ? 0 : db.settings.shippingFee;
       const order = {
         id: uid('o'), number: orderNumber(), userId: user.id, userName: user.name, userEmail: user.email,
         status: 'pendente', payment: String(payment || 'Pix'), createdAt: nowISO(),
-        items: cart.lines.map(line => ({
+        items: totals.lines.map(line => ({
           productId: line.productId, name: line.product.name, subtitle: line.product.subtitle,
           size: line.size, quantity: line.quantity, price: line.product.price, image: line.product.image
         })),
-        subtotal: cart.subtotal, shipping, total: cart.subtotal + shipping,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        coupon: totals.coupon,
+        shipping: totals.shipping,
+        total: totals.total,
         customer: {
           name: String(customer.name || user.name).trim(),
           phone: String(customer.phone || '').trim(),
@@ -632,7 +734,7 @@
           state: String(customer.state || '').trim().toUpperCase().slice(0, 2)
         }
       };
-      cart.lines.forEach(line => {
+      totals.lines.forEach(line => {
         const product = db.products.find(entry => entry.id === line.productId);
         product.stock = Math.max(0, product.stock - line.quantity);
       });

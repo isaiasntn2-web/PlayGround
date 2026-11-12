@@ -8,6 +8,9 @@
   let authMode = 'login';
   let authElements = null;
   let checkoutElements = null;
+  let checkoutCoupon = '';
+  let infoElements = null;
+  let infoTrigger = null;
 
   function toast(message) {
     let element = document.querySelector('.toast');
@@ -22,6 +25,117 @@
     element.classList.add('show');
     clearTimeout(element._timer);
     element._timer = setTimeout(() => element.classList.remove('show'), 2600);
+  }
+
+  function infoContent() {
+    const settings = RUA98.settings();
+    const money = value => `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return {
+      returns: {
+        kicker: 'TROCAS & DEVOLUÇÕES',
+        title: 'SEM MEDO<br>DE TROCAR.',
+        body: `
+          <p>Você tem <b>30 dias corridos</b> depois do recebimento para solicitar troca ou devolução. A peça precisa estar sem uso, com etiqueta e embalagem original.</p>
+          <div class="info-steps">
+            <div><span>01</span><b>FALE COM A GENTE</b><p>Envie o número do pedido e o motivo da troca para o atendimento.</p></div>
+            <div><span>02</span><b>ENVIE A PEÇA</b><p>Enviamos as instruções e o endereço de retorno por e-mail.</p></div>
+            <div><span>03</span><b>ESCOLHA O NOVO TAMANHO</b><p>Assim que a peça chegar, liberamos a troca ou o reembolso.</p></div>
+          </div>
+          <p class="info-note">Peça com defeito? A troca é gratuita e prioritária. Fale com a gente pelo Instagram ou pelo e-mail de atendimento.</p>`
+      },
+      shipping: {
+        kicker: 'ENTREGA',
+        title: 'CHEGA<br>NA SUA RUA.',
+        body: `
+          <p>Enviamos para todo o Brasil com rastreamento. O prazo começa a contar depois da confirmação do pagamento.</p>
+          <div class="info-facts">
+            <div><span>FRETE GRÁTIS</span><b>ACIMA DE ${money(settings.freeShipping)}</b></div>
+            <div><span>FRETE PADRÃO</span><b>${money(settings.shippingFee)}</b></div>
+            <div><span>PRAZO</span><b>3 A 9 DIAS ÚTEIS*</b></div>
+          </div>
+          <p class="info-note">*Prazo estimado para capitais. Regiões remotas podem levar mais tempo. O código de rastreio aparece em Minha Conta assim que o pedido é enviado.</p>`
+      },
+      privacy: {
+        kicker: 'PRIVACIDADE',
+        title: 'SEUS DADOS.<br>SUAS REGRAS.',
+        body: `
+          <p>Esta é uma loja demonstrativa. Conta, sacola, favoritos e pedidos ficam salvos <b>somente neste navegador</b>, via armazenamento local.</p>
+          <div class="info-facts">
+            <div><span>COLETA</span><b>NENHUM DADO ENVIADO</b></div>
+            <div><span>PAGAMENTO</span><b>SIMULADO</b></div>
+            <div><span>CONTROLE</span><b>VOCÊ PODE LIMPAR TUDO</b></div>
+          </div>
+          <p class="info-note">Para apagar os dados desta demo, limpe o armazenamento do site no navegador. Em uma loja real, política de privacidade, cookies e pagamento precisam seguir a LGPD.</p>`
+      },
+      sizes: {
+        kicker: 'GUIA DE TAMANHOS',
+        title: 'ACHA<br>SEU CAIMENTO.',
+        body: `
+          <p>Nossas camisetas têm modelagem <b>oversized</b>. Se você prefere um caimento mais justo, escolha um tamanho abaixo.</p>
+          <div class="size-table-wrap">
+            <table class="size-table">
+              <thead><tr><th>TAM.</th><th>TORAX</th><th>COMPRIMENTO</th><th>MANGA</th></tr></thead>
+              <tbody>
+                <tr><td>P</td><td>104 CM</td><td>70 CM</td><td>22 CM</td></tr>
+                <tr><td>M</td><td>110 CM</td><td>72 CM</td><td>23 CM</td></tr>
+                <tr><td>G</td><td>116 CM</td><td>74 CM</td><td>24 CM</td></tr>
+                <tr><td>GG</td><td>122 CM</td><td>76 CM</td><td>25 CM</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="info-note">Medidas aproximadas com a peça deitada. Modelo vestindo M · 1,78 m. Em dúvida, chama a gente antes de fechar o pedido.</p>`
+      }
+    };
+  }
+
+  function injectInfoModal() {
+    if (infoElements) return;
+    const scrim = document.createElement('div');
+    scrim.className = 'info-scrim';
+    const modal = document.createElement('section');
+    modal.className = 'info-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'info-title');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+      <button class="info-close" type="button" aria-label="Fechar">×</button>
+      <span class="eyebrow info-kicker"></span>
+      <h2 class="info-title" id="info-title"></h2>
+      <div class="info-body"></div>
+    `;
+    document.body.append(scrim, modal);
+    infoElements = { scrim, modal };
+    scrim.addEventListener('click', closeInfo);
+    modal.querySelector('.info-close').addEventListener('click', closeInfo);
+  }
+
+  function openInfo(key = 'returns') {
+    injectInfoModal();
+    if (!infoElements.modal.classList.contains('open')) infoTrigger = document.activeElement;
+    RUA98.ready().then(() => {
+      const content = infoContent()[key] || infoContent().returns;
+      infoElements.modal.querySelector('.info-kicker').textContent = content.kicker;
+      infoElements.modal.querySelector('.info-title').innerHTML = content.title;
+      infoElements.modal.querySelector('.info-body').innerHTML = content.body;
+      infoElements.scrim.classList.add('open');
+      infoElements.modal.classList.add('open');
+      infoElements.modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('info-open');
+      requestAnimationFrame(() => infoElements.modal.querySelector('.info-close').focus());
+    });
+  }
+
+  function closeInfo() {
+    if (!infoElements) return;
+    infoElements.scrim.classList.remove('open');
+    infoElements.modal.classList.remove('open');
+    infoElements.modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('info-open');
+    if (infoTrigger && typeof infoTrigger.focus === 'function') {
+      infoTrigger.focus({ preventScroll: true });
+      infoTrigger = null;
+    }
   }
 
   function injectAuthModal() {
@@ -334,7 +448,82 @@
     checkoutElements.body.addEventListener('submit', handleCheckoutSubmit);
     checkoutElements.body.addEventListener('click', event => {
       if (event.target.closest('.checkout-success-close')) closeCheckout();
+      if (event.target.closest('.coupon-apply')) applyCoupon();
+      if (event.target.closest('.coupon-remove')) {
+        checkoutCoupon = '';
+        renderCheckoutSummary(RUA98.previewOrder(''));
+        toast('CUPOM REMOVIDO.');
+        checkoutElements.body.querySelector('#checkout-coupon')?.focus();
+      }
     });
+    checkoutElements.body.addEventListener('input', event => {
+      const input = event.target.closest('#checkout-coupon');
+      if (!input) return;
+      input.value = input.value.toUpperCase().replace(/\s+/g, '');
+      const error = checkoutElements.body.querySelector('.coupon-error');
+      if (error) error.hidden = true;
+    });
+  }
+
+  function checkoutSummaryHtml(totals) {
+    const settings = RUA98.settings();
+    return `
+      <span class="eyebrow">RESUMO DA SACOLA</span>
+      <div class="checkout-lines">
+        ${totals.lines.map(line => `
+          <div class="checkout-line">
+            <img src="${esc(line.product.image)}" alt="${esc(line.product.name)}">
+            <div><b>${esc(line.product.name)}</b><span>TAM. ${esc(line.size)} · QTD. ${line.quantity}</span></div>
+            <strong>${money(line.total)}</strong>
+          </div>`).join('')}
+      </div>
+      <div class="checkout-totals">
+        <div><span>SUBTOTAL</span><b>${money(totals.subtotal)}</b></div>
+        ${totals.discount > 0 ? `<div class="checkout-discount"><span>DESCONTO ${esc(totals.coupon.code)}</span><b>-${money(totals.discount)}</b></div>` : ''}
+        <div><span>FRETE</span><b>${totals.shipping === 0 ? 'GRÁTIS' : money(totals.shipping)}</b></div>
+        <div class="checkout-total"><span>TOTAL</span><b>${money(totals.total)}</b></div>
+      </div>
+      <div class="coupon-box">
+        <span class="eyebrow">CUPOM DE DESCONTO</span>
+        <div class="coupon-row">
+          <input id="checkout-coupon" type="text" value="${esc(totals.coupon ? totals.coupon.code : '')}" placeholder="DIGITE SEU CUPOM" aria-label="Código do cupom" autocomplete="off" maxlength="20">
+          <button class="coupon-apply" type="button">${totals.coupon ? 'TROCAR' : 'APLICAR'}</button>
+        </div>
+        ${totals.coupon
+          ? `<p class="coupon-hint">CUPOM <b>${esc(totals.coupon.code)}</b> APLICADO · ${esc(totals.coupon.label)} <button class="coupon-remove" type="button">REMOVER</button></p>`
+          : '<p class="coupon-hint">USE <b>RUA10</b> NA PRIMEIRA COMPRA.</p>'}
+        <p class="coupon-error" role="alert" hidden></p>
+      </div>
+      <p class="checkout-secure">✳ ${esc(settings.checkoutNote)}</p>`;
+  }
+
+  function renderCheckoutSummary(totals) {
+    const summary = checkoutElements?.body.querySelector('.checkout-summary');
+    if (summary) summary.innerHTML = checkoutSummaryHtml(totals);
+  }
+
+  function applyCoupon() {
+    const input = checkoutElements.body.querySelector('#checkout-coupon');
+    const error = checkoutElements.body.querySelector('.coupon-error');
+    if (!input || !error) return;
+    const code = input.value.trim().toUpperCase();
+    if (!code) {
+      error.textContent = 'Digite um cupom para aplicar.';
+      error.hidden = false;
+      input.focus();
+      return;
+    }
+    try {
+      const totals = RUA98.previewOrder(code);
+      checkoutCoupon = totals.coupon.code;
+      renderCheckoutSummary(totals);
+      toast(`CUPOM ${checkoutCoupon} APLICADO ✳`);
+      checkoutElements.body.querySelector('#checkout-coupon')?.focus();
+    } catch (couponError) {
+      error.textContent = couponError.message.toUpperCase();
+      error.hidden = false;
+      input.focus();
+    }
   }
 
   function openCheckout() {
@@ -350,38 +539,26 @@
       toast('SUA SACOLA ESTÁ VAZIA.');
       return;
     }
-    const settings = RUA98.settings();
+    checkoutCoupon = '';
+    const totals = RUA98.previewOrder('');
     const lastOrder = RUA98.myOrders()[0];
     const profile = lastOrder ? lastOrder.customer : user;
     checkoutElements.body.innerHTML = `
       <div class="checkout-grid">
-        <div class="checkout-summary">
-          <span class="eyebrow">RESUMO DA SACOLA</span>
-          <div class="checkout-lines">
-            ${cart.lines.map(line => `
-              <div class="checkout-line">
-                <img src="${esc(line.product.image)}" alt="${esc(line.product.name)}">
-                <div><b>${esc(line.product.name)}</b><span>TAM. ${esc(line.size)} · QTD. ${line.quantity}</span></div>
-                <strong>${money(line.total)}</strong>
-              </div>`).join('')}
-          </div>
-          <div class="checkout-totals">
-            <div><span>SUBTOTAL</span><b>${money(cart.subtotal)}</b></div>
-            <div><span>FRETE</span><b>${cart.subtotal >= settings.freeShipping ? 'GRÁTIS' : money(settings.shippingFee)}</b></div>
-            <div class="checkout-total"><span>TOTAL</span><b>${money(cart.subtotal + (cart.subtotal >= settings.freeShipping ? 0 : settings.shippingFee))}</b></div>
-          </div>
-          <p class="checkout-secure">✳ ${esc(settings.checkoutNote)}</p>
-        </div>
+        <div class="checkout-summary">${checkoutSummaryHtml(totals)}</div>
         <form class="checkout-form" novalidate>
           <span class="eyebrow">ENTREGA</span>
           <div class="checkout-fields">
-            <label class="span-2">NOME<input name="name" value="${esc(profile.name || user.name)}" required></label>
-            <label>TELEFONE<input name="phone" value="${esc(profile.phone || '')}" placeholder="(11) 99999-9999" required></label>
-            <label>CEP<input name="zip" value="${esc(profile.zip || '')}" placeholder="00000-000" required></label>
-            <label class="span-2">ENDEREÇO<input name="address" value="${esc(profile.address || '')}" placeholder="Rua, avenida..." required></label>
-            <label>NÚMERO<input name="number" value="${esc(profile.number || '')}" placeholder="98"></label>
-            <label>CIDADE<input name="city" value="${esc(profile.city || '')}" required></label>
-            <label>ESTADO<input name="state" value="${esc(profile.state || '')}" maxlength="2" placeholder="SP" required></label>
+            <label class="span-2">NOME<input name="name" value="${esc(profile.name || user.name)}" autocomplete="name" required></label>
+            <label>TELEFONE<input name="phone" value="${esc(profile.phone || '')}" placeholder="(11) 99999-9999" inputmode="tel" autocomplete="tel" required></label>
+            <label>CEP<input name="zip" value="${esc(profile.zip || '')}" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" required></label>
+            <label class="span-2">ENDEREÇO<input name="address" value="${esc(profile.address || '')}" placeholder="Rua, avenida..." autocomplete="address-line1" required></label>
+            <label>NÚMERO<input name="number" value="${esc(profile.number || '')}" placeholder="98" autocomplete="address-line2"></label>
+            <label>CIDADE<input name="city" value="${esc(profile.city || '')}" autocomplete="address-level2" required></label>
+            <label>ESTADO<select name="state" autocomplete="address-level1" required>
+              <option value="">UF</option>
+              ${['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => `<option value="${uf}"${String(profile.state || '').toUpperCase() === uf ? ' selected' : ''}>${uf}</option>`).join('')}
+            </select></label>
           </div>
           <span class="eyebrow checkout-payment-label">PAGAMENTO <i>DEMO</i></span>
           <div class="payment-options">
@@ -400,11 +577,12 @@
     checkoutElements.modal.classList.add('open');
     checkoutElements.modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('checkout-open');
-    requestAnimationFrame(() => checkoutElements.body.querySelector('input')?.focus());
+    requestAnimationFrame(() => checkoutElements.body.querySelector('.checkout-form input')?.focus());
   }
 
   function closeCheckout() {
     if (!checkoutElements) return;
+    checkoutCoupon = '';
     checkoutElements.scrim.classList.remove('open');
     checkoutElements.modal.classList.remove('open');
     checkoutElements.modal.setAttribute('aria-hidden', 'true');
@@ -428,23 +606,42 @@
       error.hidden = false;
       return;
     }
+    if (values.phone.replace(/\D/g, '').length < 10) {
+      error.textContent = 'Informe um telefone com DDD.';
+      error.hidden = false;
+      form.elements.phone.focus();
+      return;
+    }
+    if (values.zip.replace(/\D/g, '').length !== 8) {
+      error.textContent = 'Informe um CEP com 8 dígitos.';
+      error.hidden = false;
+      form.elements.zip.focus();
+      return;
+    }
     try {
       const order = RUA98.createOrder({
         payment: values.payment,
-        customer: values
+        customer: values,
+        couponCode: checkoutCoupon
       });
+      const saving = order.discount > 0
+        ? `<span class="checkout-success-saving">CUPOM ${esc(order.coupon.code)} · VOCÊ ECONOMIZOU ${money(order.discount)}</span>`
+        : '';
       checkoutElements.body.innerHTML = `
         <div class="checkout-success">
           <span class="checkout-success-star">✳</span>
           <span class="eyebrow">PEDIDO CONFIRMADO</span>
           <h3>AGORA É<br><span>COM A GENTE.</span></h3>
           <p>Pedido <b>#${order.number}</b> registrado com sucesso.<br>Você acompanha tudo em Minha Conta.</p>
+          ${saving}
+          <p class="checkout-success-total">TOTAL DO PEDIDO <b>${money(order.total)}</b></p>
           <div class="checkout-success-actions">
             <a class="button button-dark" href="conta.html#pedidos">VER MEUS PEDIDOS <span>↗</span></a>
             <button class="button checkout-success-close" type="button">CONTINUAR COMPRANDO</button>
           </div>
         </div>
       `;
+      checkoutCoupon = '';
       toast(`PEDIDO #${order.number} CONFIRMADO ✳`);
     } catch (orderError) {
       error.textContent = orderError.message;
@@ -452,8 +649,16 @@
     }
   }
 
+  document.addEventListener('click', event => {
+    const trigger = event.target.closest('[data-info]');
+    if (!trigger) return;
+    event.preventDefault();
+    openInfo(trigger.dataset.info);
+  });
+
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    if (infoElements?.modal.classList.contains('open')) closeInfo();
     if (checkoutElements?.modal.classList.contains('open')) closeCheckout();
     if (authElements?.modal.classList.contains('open')) closeAuth();
   });
@@ -472,11 +677,14 @@
       injectAuthModal();
       injectAccountButton();
       injectCheckout();
+      injectInfoModal();
     },
     openAuth,
     closeAuth,
     openCheckout,
     closeCheckout,
+    openInfo,
+    closeInfo,
     refreshHeader,
     toast,
     requireLogin(message = 'Entre para continuar.') {
