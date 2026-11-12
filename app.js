@@ -6,13 +6,19 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char]));
   const price = value => `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-  const state = { category: 'todos', collection: 'todos', search: '' };
+  const state = { category: 'todos', collection: 'todos', search: '', sort: 'featured', favoritesOnly: false };
   const grid = document.querySelector('#product-grid');
   const filterList = document.querySelector('#filter-list');
   const collectionFilter = document.querySelector('#collection-filter');
+  const sortFilter = document.querySelector('#sort-filter');
+  const favoritesToggle = document.querySelector('.favorites-toggle');
   const resultsCount = document.querySelector('.results-count');
   const emptyProducts = document.querySelector('.empty-products');
   const drawer = document.querySelector('.cart-drawer');
+  let productElements = null;
+  let modalProductId = null;
+  let modalSize = '';
+  let modalTrigger = null;
 
   function applySettings() {
     const settings = RUA98.settings();
@@ -59,18 +65,26 @@
       .map(collection => `<option value="${esc(collection.id)}">${esc(collection.name.toUpperCase())}</option>`)
       .join('');
     collectionFilter.value = state.collection;
+    if (sortFilter) sortFilter.value = state.sort;
   }
 
   function filteredProducts() {
     const collections = new Map(RUA98.collections({ includeInactive: true }).map(collection => [collection.id, collection.name]));
     const term = state.search.trim().toLowerCase();
-    return activeProducts().filter(product => {
+    const results = activeProducts().filter(product => {
       const matchesCategory = state.category === 'todos' || product.category === state.category;
       const matchesCollection = state.collection === 'todos' || product.collectionId === state.collection;
+      const matchesFavorite = !state.favoritesOnly || RUA98.isFavorite(product.id);
       const haystack = [product.name, product.subtitle, product.tag, product.description, collections.get(product.collectionId) || '']
         .join(' ').toLowerCase();
-      return matchesCategory && matchesCollection && (!term || haystack.includes(term));
+      return matchesCategory && matchesCollection && matchesFavorite && (!term || haystack.includes(term));
     });
+    if (state.sort === 'price-asc') results.sort((a, b) => a.price - b.price);
+    else if (state.sort === 'price-desc') results.sort((a, b) => b.price - a.price);
+    else if (state.sort === 'name') results.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    else if (state.sort === 'new') results.sort((a, b) => Number(b.isNew) - Number(a.isNew) || String(b.createdAt).localeCompare(String(a.createdAt)));
+    else results.sort((a, b) => Number(b.featured) - Number(a.featured) || Number(b.isNew) - Number(a.isNew));
+    return results;
   }
 
   function productCard(product) {
@@ -91,7 +105,7 @@
           </button>
         </div>
         <div class="product-info">
-          <div><h3>${esc(product.name)}</h3><span class="product-subtitle">${esc(product.subtitle || product.meta)}</span></div>
+          <div><h3>${esc(product.name)}</h3><span class="product-subtitle">${esc(product.subtitle || product.meta)}</span><button class="product-details" type="button" data-details="${esc(product.id)}" aria-label="Ver detalhes de ${esc(product.name)}">VER DETALHES <span>↗</span></button></div>
           <span class="product-price">${price(product.price)}${product.compareAt ? `<s>${price(product.compareAt)}</s>` : ''}</span>
         </div>
         <div class="product-meta">
@@ -107,6 +121,16 @@
     resultsCount.textContent = `MOSTRANDO ${String(products.length).padStart(2, '0')} ${products.length === 1 ? 'PEÇA' : 'PEÇAS'}`;
     emptyProducts.hidden = products.length > 0;
     grid.hidden = products.length === 0;
+    const emptyText = emptyProducts.querySelector('.empty-text');
+    if (emptyText) emptyText.textContent = state.favoritesOnly ? 'VOCÊ AINDA NÃO SALVOU NENHUMA PEÇA.' : 'NENHUMA PEÇA ENCONTRADA.';
+    if (favoritesToggle) {
+      const favorites = activeProducts().filter(product => RUA98.isFavorite(product.id)).length;
+      favoritesToggle.querySelector('.favorites-count').textContent = favorites;
+      favoritesToggle.classList.toggle('active', state.favoritesOnly);
+      favoritesToggle.setAttribute('aria-pressed', String(state.favoritesOnly));
+      favoritesToggle.setAttribute('aria-label', state.favoritesOnly ? 'Mostrar todas as peças' : 'Mostrar peças favoritas');
+      favoritesToggle.title = `${favorites} ${favorites === 1 ? 'peça salva' : 'peças salvas'}`;
+    }
     renderFilters();
   }
 
@@ -181,12 +205,198 @@
     }));
   }
 
+  function ensureProductModal() {
+    if (productElements) return productElements;
+    if (document.querySelector('.product-modal')) {
+      productElements = {
+        scrim: document.querySelector('.product-scrim'),
+        modal: document.querySelector('.product-modal'),
+        body: document.querySelector('.product-modal-body')
+      };
+      return productElements;
+    }
+    const scrim = document.createElement('div');
+    scrim.className = 'product-scrim';
+    const modal = document.createElement('section');
+    modal.className = 'product-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'product-detail-title');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+      <button class="product-close" type="button" aria-label="Fechar detalhes">×</button>
+      <div class="product-modal-body"></div>
+    `;
+    document.body.append(scrim, modal);
+    productElements = { scrim, modal, body: modal.querySelector('.product-modal-body') };
+    scrim.addEventListener('click', closeProductModal);
+    modal.querySelector('.product-close').addEventListener('click', closeProductModal);
+    productElements.body.addEventListener('click', event => {
+      const sizeButton = event.target.closest('[data-detail-size]');
+      if (sizeButton) {
+        modalSize = sizeButton.dataset.detailSize;
+        productElements.body.querySelectorAll('[data-detail-size]').forEach(button => {
+          const active = button.dataset.detailSize === modalSize;
+          button.classList.toggle('selected', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        const error = productElements.body.querySelector('.product-detail-error');
+        if (error) error.hidden = true;
+        return;
+      }
+      if (event.target.closest('[data-detail-add]')) {
+        const product = RUA98.product(modalProductId);
+        if (!product) return;
+        if (!modalSize) {
+          const error = productElements.body.querySelector('.product-detail-error');
+          error.textContent = 'ESCOLHA UM TAMANHO PARA CONTINUAR.';
+          error.hidden = false;
+          return;
+        }
+        try {
+          RUA98.addToCart(product.id, modalSize);
+          closeProductModal();
+          renderCart();
+          AuthUI.toast(`${product.name} · TAM. ${modalSize} NA SACOLA ✳`);
+          openCart();
+        } catch (error) {
+          const message = productElements.body.querySelector('.product-detail-error');
+          message.textContent = error.message.toUpperCase();
+          message.hidden = false;
+        }
+        return;
+      }
+      if (event.target.closest('[data-detail-favorite]')) {
+        try {
+          const result = RUA98.toggleFavorite(modalProductId);
+          AuthUI.toast(result.active ? 'PEÇA SALVA NOS SEUS FAVORITOS ✳' : 'PEÇA REMOVIDA DOS FAVORITOS');
+          renderProducts();
+          AuthUI.refreshHeader();
+          const button = productElements.body.querySelector('[data-detail-favorite]');
+          if (button) {
+            button.classList.toggle('active', result.active);
+            button.innerHTML = result.active ? '♥ FAVORITADO' : '♡ FAVORITAR';
+            button.setAttribute('aria-pressed', String(result.active));
+          }
+        } catch (error) {
+          AuthUI.toast(error.message.toUpperCase());
+        }
+        return;
+      }
+      const related = event.target.closest('[data-related]');
+      if (related) openProductModal(related.dataset.related);
+    });
+    return productElements;
+  }
+
+  function productModalHtml(product) {
+    const collection = RUA98.collection(product.collectionId);
+    const settings = RUA98.settings();
+    const favorite = RUA98.isFavorite(product.id);
+    const soldOut = product.stock <= 0;
+    const lowStock = !soldOut && product.stock <= 5;
+    const tagClass = soldOut ? 'tag-limited' : product.isNew ? 'tag-new' : /LIMITADA/.test(product.tag || '') ? 'tag-limited' : '';
+    const relatedCandidates = activeProducts().filter(item => item.id !== product.id);
+    const related = relatedCandidates
+      .filter(item => item.collectionId === product.collectionId || item.category === product.category)
+      .concat(relatedCandidates.filter(item => item.collectionId !== product.collectionId && item.category !== product.category))
+      .slice(0, 2);
+    const sizes = product.sizes.map(size => `
+      <button type="button" data-detail-size="${esc(size)}" class="${size === modalSize ? 'selected' : ''}" aria-pressed="${size === modalSize}" ${soldOut ? 'disabled' : ''}>${esc(size)}</button>`).join('');
+    return `
+      <div class="product-detail-grid">
+        <div class="product-detail-media">
+          <img src="${esc(product.image)}" alt="${esc(product.name)}">
+          ${product.tag ? `<span class="product-tag ${tagClass}">${esc(soldOut ? 'ESGOTADO' : product.tag)}</span>` : soldOut ? '<span class="product-tag tag-limited">ESGOTADO</span>' : ''}
+          <span class="product-detail-media-label">RUA 98 · ${esc(collection ? collection.name.toUpperCase() : 'DROP 01')}</span>
+        </div>
+        <div class="product-detail-copy">
+          <span class="eyebrow"><span class="eyebrow-line"></span> ${esc(collection ? collection.name.toUpperCase() : 'RUA 98')} · DROP 01</span>
+          <h2 id="product-detail-title">${esc(product.name)}</h2>
+          <p class="product-detail-subtitle">${esc(product.subtitle || product.meta)}</p>
+          <div class="product-detail-price">${price(product.price)}${product.compareAt ? `<s>${price(product.compareAt)}</s>` : ''}</div>
+          <p class="product-detail-description">${esc(product.description || 'Algodão de verdade, modelagem ampla e acabamento pensado pra durar.')}</p>
+          <div class="product-detail-meta">
+            <span>${esc(product.meta || '100% ALGODÃO')}</span>
+            <span>${esc(collection ? collection.name : 'RUA 98')}</span>
+          </div>
+          <div class="product-detail-stock${lowStock ? ' is-low' : ''}${soldOut ? ' is-out' : ''}">
+            ${soldOut ? 'ESGOTADO · VOLTA EM BREVE' : lowStock ? `ÚLTIMAS ${product.stock} UNIDADES` : `${product.stock} UNIDADES EM ESTOQUE`}
+          </div>
+          <span class="product-detail-label">ESCOLHA SEU TAMANHO</span>
+          <div class="product-size-grid">${sizes}</div>
+          <p class="product-detail-error" role="alert" hidden></p>
+          <div class="product-detail-actions">
+            <button class="button button-dark product-detail-add" type="button" data-detail-add ${soldOut ? 'disabled' : ''}>${soldOut ? 'ESGOTADO' : 'ADICIONAR À SACOLA'} <span>${soldOut ? '×' : '↗'}</span></button>
+            <button class="product-detail-favorite${favorite ? ' active' : ''}" type="button" data-detail-favorite aria-pressed="${favorite}">${favorite ? '♥ FAVORITADO' : '♡ FAVORITAR'}</button>
+          </div>
+          <button class="size-guide-link" type="button" data-info="sizes">GUIA DE TAMANHOS <span>↗</span></button>
+          <div class="product-detail-trust">
+            <span>✳ FRETE GRÁTIS ACIMA DE ${price(settings.freeShipping)}</span>
+            <span>✳ TROCA EM ATÉ 30 DIAS</span>
+          </div>
+        </div>
+      </div>
+      ${related.length ? `
+        <div class="product-related">
+          <div class="product-related-head"><span class="eyebrow">COMBINA COM</span><span>MAIS DA RUA ↗</span></div>
+          <div class="product-related-grid">
+            ${related.map(item => `
+              <button class="related-card" type="button" data-related="${esc(item.id)}" aria-label="Ver ${esc(item.name)}">
+                <img src="${esc(item.image)}" alt="${esc(item.name)}" loading="lazy">
+                <span>${esc(item.name)}</span>
+                <b>${price(item.price)}</b>
+              </button>`).join('')}
+          </div>
+        </div>` : ''}
+    `;
+  }
+
+  function openProductModal(id) {
+    const product = RUA98.product(id);
+    if (!product) return;
+    document.querySelectorAll('.size-picker').forEach(picker => picker.remove());
+    ensureProductModal();
+    if (!productElements.modal.classList.contains('open')) modalTrigger = document.activeElement;
+    modalProductId = product.id;
+    modalSize = product.sizes.includes('M') ? 'M' : product.sizes[0] || '';
+    if (product.stock <= 0) modalSize = '';
+    productElements.body.innerHTML = productModalHtml(product);
+    productElements.scrim.classList.add('open');
+    productElements.modal.classList.add('open');
+    productElements.modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('product-open');
+    requestAnimationFrame(() => productElements.modal.querySelector('.product-close')?.focus());
+  }
+
+  function closeProductModal() {
+    if (!productElements) return;
+    productElements.scrim.classList.remove('open');
+    productElements.modal.classList.remove('open');
+    productElements.modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('product-open');
+    modalProductId = null;
+    modalSize = '';
+    if (modalTrigger && typeof modalTrigger.focus === 'function') {
+      modalTrigger.focus({ preventScroll: true });
+      modalTrigger = null;
+    }
+  }
+
+
   filterList.addEventListener('click', event => {
     const button = event.target.closest('[data-filter]');
     if (!button) return;
     state.category = button.dataset.filter;
     renderProducts();
   });
+
+  if (sortFilter) {
+    sortFilter.addEventListener('change', event => {
+      state.sort = event.target.value;
+      renderProducts();
+    });
+  }
 
   collectionFilter.addEventListener('change', event => {
     state.collection = event.target.value;
@@ -204,6 +414,13 @@
       } catch (error) {
         AuthUI.toast(error.message.toUpperCase());
       }
+      return;
+    }
+    const card = event.target.closest('.product-card');
+    const detailsButton = event.target.closest('[data-details]');
+    const image = event.target.closest('.product-image');
+    if (card && (detailsButton || (image && !event.target.closest('button')))) {
+      openProductModal(card.dataset.id);
       return;
     }
     const addButton = event.target.closest('.quick-add');
@@ -234,6 +451,14 @@
     panel.classList.toggle('open');
     if (panel.classList.contains('open')) document.querySelector('#search-input').focus();
   });
+  if (favoritesToggle) {
+    favoritesToggle.addEventListener('click', () => {
+      state.favoritesOnly = !state.favoritesOnly;
+      renderProducts();
+      document.querySelector('#colecao').scrollIntoView({ behavior: 'smooth' });
+      AuthUI.toast(state.favoritesOnly ? 'MOSTRANDO SÓ AS PEÇAS QUE VOCÊ SALVOU ♥' : 'MOSTRANDO TODAS AS PEÇAS.');
+    });
+  }
   document.querySelector('#search-input').addEventListener('input', event => {
     state.search = event.target.value;
     renderProducts();
@@ -246,6 +471,7 @@
     state.search = '';
     state.category = 'todos';
     state.collection = 'todos';
+    state.favoritesOnly = false;
     document.querySelector('#search-input').value = '';
     document.querySelector('#collection-filter').value = 'todos';
     renderProducts();
@@ -263,7 +489,9 @@
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
+      if (document.querySelector('.info-modal.open')) return;
       closeCart();
+      closeProductModal();
       document.querySelector('.search-panel').classList.remove('open');
       document.querySelector('.main-nav').classList.remove('open');
       document.querySelectorAll('.size-picker').forEach(picker => picker.remove());
@@ -274,8 +502,13 @@
     event.preventDefault();
     const email = document.querySelector('#email');
     if (!email.checkValidity()) return email.reportValidity();
-    AuthUI.toast('VOCÊ TÁ NA LISTA! CONFERE SEU E-MAIL ✳');
-    event.currentTarget.reset();
+    try {
+      const result = RUA98.subscribeNewsletter(email.value);
+      AuthUI.toast(result.already ? 'VOCÊ JÁ ESTÁ NA LISTA. CUPOM RUA10 LIBERADO ✳' : 'BEM-VINDO À LISTA! USE O CUPOM RUA10 ✳');
+      event.currentTarget.reset();
+    } catch (error) {
+      AuthUI.toast(error.message.toUpperCase());
+    }
   });
 
   window.addEventListener('rua98:auth', () => {

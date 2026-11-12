@@ -50,8 +50,24 @@
     }
   }
 
+  function orderTracker(order) {
+    if (order.status === 'cancelado') {
+      return '<div class="order-track is-cancelled"><span>PEDIDO CANCELADO · FALE COM A GENTE PARA REABRIR</span></div>';
+    }
+    const steps = [['pendente', 'PEDIDO'], ['pago', 'PAGO'], ['enviado', 'ENVIADO'], ['entregue', 'ENTREGUE']];
+    const current = Math.max(0, steps.findIndex(step => step[0] === order.status));
+    return `
+      <div class="order-track" aria-label="Progresso do pedido">
+        ${steps.map((step, index) => `
+          <span class="order-track-step${index <= current ? ' done' : ''}${index === current ? ' current' : ''}">
+            <i>${String(index + 1).padStart(2, '0')}</i><b>${step[1]}</b>
+          </span>`).join('')}
+      </div>`;
+  }
+
   function orderCard(order) {
     const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const discount = Number(order.discount) || 0;
     return `
       <article class="account-order">
         <div class="account-order-head">
@@ -61,6 +77,7 @@
           </div>
           <span class="order-status ${esc(order.status)}">${statusLabels[order.status] || esc(order.status)}</span>
         </div>
+        ${orderTracker(order)}
         <div class="account-order-body">
           ${order.items.map(item => `
             <div class="account-order-item">
@@ -70,8 +87,8 @@
             </div>`).join('')}
         </div>
         <div class="account-order-foot">
-          <span>${itemCount} ${itemCount === 1 ? 'PEÇA' : 'PEÇAS'} · FRETE ${order.shipping ? money(order.shipping) : 'GRÁTIS'}</span>
-          <b>${money(order.total)}</b>
+          <span>${itemCount} ${itemCount === 1 ? 'PEÇA' : 'PEÇAS'} · FRETE ${order.shipping ? money(order.shipping) : 'GRÁTIS'}${order.coupon ? ` · CUPOM ${esc(order.coupon.code)}` : ''}</span>
+          <span class="account-order-money">${discount > 0 ? `<small>DESCONTO -${money(discount)}</small>` : ''}<b>${money(order.total)}</b></span>
         </div>
       </article>`;
   }

@@ -658,6 +658,7 @@
         </div>
         <div class="order-totals">
           <div><span>SUBTOTAL</span><b>${money(order.subtotal)}</b></div>
+          ${Number(order.discount) > 0 ? `<div><span>DESCONTO ${esc(order.coupon?.code || 'CUPOM')}</span><b>-${money(order.discount)}</b></div>` : ''}
           <div><span>FRETE</span><b>${order.shipping ? money(order.shipping) : 'GRÁTIS'}</b></div>
           <div class="grand"><span>TOTAL</span><b>${money(order.total)}</b></div>
         </div>
@@ -779,6 +780,7 @@
   function renderSettings() {
     const settings = RUA98.settings();
     const admins = RUA98.users().filter(user => user.role === 'admin');
+    const subscribers = RUA98.newsletterSubscribers();
     content.innerHTML = `
       <div class="admin-panel">
         <div class="panel-heading">
@@ -823,6 +825,19 @@
                   return `<div class="team-member"><span class="avatar">${esc(initials)}</span><div><b>${esc(admin.name)}${admin.id === me.id ? ' (VOCÊ)' : ''}</b><span>${esc(admin.email)}</span></div><span class="badge admin">ADMIN</span></div>`;
                 }).join('')}
               </div>
+            </div>
+            <div class="settings-card">
+              <div class="settings-card-head"><h3>Lista da rua</h3><p>${subscribers.length} ${subscribers.length === 1 ? 'E-MAIL CADASTRADO' : 'E-MAILS CADASTRADOS'}</p></div>
+              ${subscribers.length ? `
+                <div class="team-list">
+                  ${subscribers.slice(0, 6).map(entry => `
+                    <div class="team-member">
+                      <span class="avatar">✳</span>
+                      <div><b>${esc(entry.email)}</b><span>${dateBR(entry.createdAt)} · ${esc(entry.source || 'site').toUpperCase()}</span></div>
+                    </div>`).join('')}
+                </div>
+                ${subscribers.length > 6 ? `<p class="security-note">E MAIS ${subscribers.length - 6} CONTATO(S) NA LISTA.</p>` : ''}`
+                : '<p class="security-note">NENHUM E-MAIL CADASTRADO AINDA. A LISTA É ALIMENTADA PELA NEWSLETTER DA VITRINE.</p>'}
             </div>
             <div class="settings-card">
               <div class="settings-card-head"><h3>Dados da loja</h3><p>BACKUP E RESTAURAÇÃO</p></div>
