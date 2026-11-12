@@ -574,3 +574,108 @@ body.info-open { overflow: hidden; }
 @media (max-width: 380px) {
   .header-actions { gap: 8px; }
 }
+
+/* ---------- acessibilidade ---------- */
+.skip-link {
+  position: fixed; left: 12px; top: -90px; z-index: 200;
+  background: var(--ink); color: var(--paper); padding: 11px 17px;
+  font: 8px var(--mono); letter-spacing: .06em; transition: top .18s;
+}
+.skip-link:focus { top: 12px; }
+
+/* ---------- busca ampliada ---------- */
+.search-extras { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.search-suggestions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.search-suggestions > span { font: 6.5px var(--mono); color: var(--muted); letter-spacing: .05em; }
+.search-suggestions button {
+  border: 1px solid var(--line); background: none; padding: 6px 9px; cursor: pointer;
+  font: 6.5px var(--mono); letter-spacing: .04em; transition: .15s;
+}
+.search-suggestions button:hover,
+.search-suggestions button:focus-visible { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.search-hint { font: 7px var(--mono); color: var(--red); letter-spacing: .03em; }
+.search-hint:empty { display: none; }
+
+/* ---------- vistos por último ---------- */
+.recently-viewed { padding-top: 0; }
+.recently-clear {
+  background: none; border: 0; border-bottom: 1px solid var(--ink); padding: 0 0 4px;
+  font: 7px var(--mono); letter-spacing: .05em; cursor: pointer;
+}
+.recently-clear:hover { color: var(--red); border-color: var(--red); }
+.recent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 26px; }
+.recent-card { background: #efede4; min-width: 0; }
+.recent-media {
+  display: block; width: 100%; border: 0; padding: 0; background: #ddd9cf; cursor: zoom-in;
+  aspect-ratio: 4 / 5; overflow: hidden;
+}
+.recent-media img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.8); transition: transform .5s; }
+.recent-media:hover img { transform: scale(1.04); }
+.recent-info { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 11px 12px; }
+.recent-info b { display: block; font: 600 9.5px var(--display); letter-spacing: .01em; }
+.recent-info span { display: block; font: 6px var(--mono); color: var(--muted); margin-top: 3px; }
+.recent-info strong { font: 500 9px var(--mono); white-space: nowrap; }
+
+/* ---------- estoque baixo no card ---------- */
+.stock-flag {
+  position: absolute; left: 12px; bottom: 52px; z-index: 2;
+  background: var(--red); color: #fff; padding: 5px 8px;
+  font: 6.5px var(--mono); letter-spacing: .05em;
+}
+
+/* ---------- links do detalhe do produto ---------- */
+.product-detail-links { display: flex; align-items: center; gap: 20px; margin-top: 16px; flex-wrap: wrap; }
+.product-detail-links .size-guide-link { margin-top: 0; }
+
+/* ---------- rastreio e ações do pedido ---------- */
+.order-tracking {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: #e9e6dc; padding: 10px 17px; border-bottom: 1px solid var(--line);
+}
+.order-tracking span { font: 6.5px var(--mono); color: var(--muted); letter-spacing: .04em; }
+.order-tracking b { font: 500 9.5px var(--mono); letter-spacing: .05em; }
+.order-tracking button {
+  margin-left: auto; border: 1px solid var(--line); background: none; padding: 5px 9px;
+  font: 6.5px var(--mono); cursor: pointer;
+}
+.order-tracking button:hover { border-color: var(--ink); }
+.account-order-actions {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 12px 17px; border-top: 1px solid var(--line);
+}
+.account-reorder,
+.account-cancel {
+  border: 1px solid var(--ink); background: none; padding: 9px 13px; cursor: pointer;
+  font: 7px var(--mono); letter-spacing: .04em; transition: .15s;
+}
+.account-reorder { background: var(--ink); color: var(--paper); display: inline-flex; align-items: center; gap: 9px; }
+.account-reorder:hover { background: var(--red); border-color: var(--red); }
+.account-reorder span { font-size: 11px; }
+.account-reorder:disabled { opacity: .55; cursor: wait; }
+.account-cancel { border-color: #d8a79e; color: #952f1e; }
+.account-cancel:hover { background: var(--red); border-color: var(--red); color: #fff; }
+.account-cancel.is-confirming { background: var(--red); border-color: var(--red); color: #fff; }
+
+/* ---------- movimento reduzido ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .ticker-track { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .recent-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .recent-grid { gap: 11px; }
+  .recent-info { display: block; padding: 9px 10px; }
+  .recent-info strong { display: block; margin-top: 5px; }
+  .stock-flag { left: 7px; bottom: 45px; padding: 4px 6px; font-size: 6px; }
+  .search-extras { gap: 9px; }
+  .order-tracking { padding: 9px 12px; }
+  .account-order-actions { padding: 11px 12px; }
+}

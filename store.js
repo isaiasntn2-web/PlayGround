@@ -121,7 +121,7 @@
     return [
       {
         id: 'o1042', number: 1042, userId: 'u_demo', userName: 'Cliente Demo', userEmail: 'cliente@rua98.com',
-        status: 'enviado', payment: 'Pix', createdAt: '2026-11-02T14:20:00.000Z',
+        status: 'enviado', payment: 'Pix', createdAt: '2026-11-02T14:20:00.000Z', trackingCode: 'BR98 4210 7745',
         items: [
           { productId: 'p1', name: 'CAMISETA RUA 98', subtitle: 'HEAVYWEIGHT · PRETA', size: 'M', quantity: 1, price: 159, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80' },
           { productId: 'p2', name: 'CLUBE DA RUA', subtitle: 'ESTAMPA VINTAGE · OFF-WHITE', size: 'G', quantity: 1, price: 179, image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=800&q=80' }
@@ -216,6 +216,10 @@
       }
       if (order.coupon === undefined) {
         order.coupon = null;
+        changed = true;
+      }
+      if (order.trackingCode === undefined) {
+        order.trackingCode = '';
         changed = true;
       }
     });
@@ -662,7 +666,52 @@
       return cartDetailed();
     },
     clearCart() { writeCart([]); },
-    coupons() { return copy((db.settings.coupons || []).filter(coupon => coupon.active)); },
+    coupons(options = {}) {
+      const list = db.settings.coupons || [];
+      return copy(options.includeInactive ? list : list.filter(coupon => coupon.active));
+    },
+    couponUsage(code) {
+      const normalized = String(code || '').toUpperCase();
+      return db.orders.filter(order => order.status !== 'cancelado' && order.coupon && order.coupon.code === normalized).length;
+    },
+    saveCoupon(input) {
+      const code = String(input.code || '').trim().toUpperCase().replace(/\s+/g, '');
+      if (!/^[A-Z0-9_-]{3,20}$/.test(code)) throw new Error('Use um código de 3 a 20 caracteres (letras, números, - ou _).');
+      const value = Number(input.value);
+      if (!Number.isFinite(value) || value <= 0) throw new Error('Informe um valor de desconto válido.');
+      const type = input.type === 'fixed' ? 'fixed' : 'percent';
+      if (type === 'percent' && value > 90) throw new Error('O desconto percentual máximo é 90%.');
+      const original = input.originalCode ? String(input.originalCode).trim().toUpperCase() : '';
+      const coupons = db.settings.coupons || (db.settings.coupons = []);
+      const existing = original ? coupons.find(coupon => coupon.code === original) : null;
+      if (!existing && coupons.some(coupon => coupon.code === code)) throw new Error('Já existe um cupom com este código.');
+      if (existing && code !== original && coupons.some(coupon => coupon.code === code)) throw new Error('Já existe um cupom com este código.');
+      const coupon = {
+        code,
+        type,
+        value,
+        label: String(input.label || '').trim().toUpperCase() || (type === 'percent' ? `${value}% OFF` : `${value} DE DESCONTO`),
+        active: input.active !== false,
+        minSubtotal: Math.max(0, Number(input.minSubtotal) || 0),
+        oncePerUser: Boolean(input.oncePerUser)
+      };
+      if (existing) Object.assign(existing, coupon);
+      else coupons.push(coupon);
+      persist();
+      return copy(coupon);
+    },
+    deleteCoupon(code) {
+      const normalized = String(code || '').toUpperCase();
+      db.settings.coupons = (db.settings.coupons || []).filter(coupon => coupon.code !== normalized);
+      persist();
+    },
+    toggleCoupon(code) {
+      const coupon = (db.settings.coupons || []).find(entry => entry.code === String(code || '').toUpperCase());
+      if (!coupon) throw new Error('Cupom não encontrado.');
+      coupon.active = !coupon.active;
+      persist();
+      return copy(coupon);
+    },
     previewOrder(couponCode = '') { return copy(orderTotals(couponCode)); },
 
     subscribeNewsletter(email) {
@@ -714,7 +763,7 @@
       }
       const order = {
         id: uid('o'), number: orderNumber(), userId: user.id, userName: user.name, userEmail: user.email,
-        status: 'pendente', payment: String(payment || 'Pix'), createdAt: nowISO(),
+        status: 'pendente', payment: String(payment || 'Pix'), createdAt: nowISO(), trackingCode: '',
         items: totals.lines.map(line => ({
           productId: line.productId, name: line.product.name, subtitle: line.product.subtitle,
           size: line.size, quantity: line.quantity, price: line.product.price, image: line.product.image
@@ -759,6 +808,61 @@
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
     },
     orders() { return copy([...db.orders].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))); },
+    updateOrderTracking(id, code) {
+      const order = db.orders.find(entry => entry.id === id);
+      if (!order) throw new Error('Pedido não encontrado.');
+      order.trackingCode = String(code || '').trim().toUpperCase().slice(0, 40);
+      order.updatedAt = nowISO();
+      persist();
+      return copy(order);
+    },
+    cancelMyOrder(id) {
+      const user = currentUser();
+      if (!user) throw new Error('Entre na sua conta para cancelar o pedido.');
+      const order = db.orders.find(entry => entry.id === id);
+      if (!order || order.userId !== user.id) throw new Error('Pedido não encontrado.');
+      if (!['pendente', 'pago'].includes(order.status)) throw new Error('Este pedido já saiu para entrega e não pode ser cancelado.');
+      order.items.forEach(item => {
+        const product = db.products.find(entry => entry.id === item.productId);
+        if (product) product.stock += item.quantity;
+      });
+      order.status = 'cancelado';
+      order.canceledAt = nowISO();
+      order.updatedAt = nowISO();
+      persist();
+      return copy(order);
+    },
+    reorder(orderId) {
+      const user = currentUser();
+      if (!user) throw new Error('Entre na sua conta para comprar novamente.');
+      const order = db.orders.find(entry => entry.id === orderId && entry.userId === user.id);
+      if (!order) throw new Error('Pedido não encontrado.');
+      const cart = activeCart();
+      let added = 0;
+      let skipped = 0;
+      order.items.forEach(item => {
+        const product = db.products.find(entry => entry.id === item.productId);
+        if (!product || !product.active || product.stock <= 0) {
+          skipped += 1;
+          return;
+        }
+        const size = product.sizes.includes(item.size) ? item.size : product.sizes[0];
+        const existing = cart.find(line => line.productId === product.id && line.size === size);
+        const current = existing ? existing.quantity : 0;
+        const room = product.stock - current;
+        if (room <= 0) {
+          skipped += 1;
+          return;
+        }
+        const quantity = Math.min(item.quantity, room);
+        if (existing) existing.quantity += quantity;
+        else cart.push({ productId: product.id, size, quantity });
+        added += quantity;
+        if (quantity < item.quantity) skipped += 1;
+      });
+      writeCart(cart);
+      return { added, skipped, cart: cartDetailed() };
+    },
     updateOrderStatus(id, status) {
       const order = db.orders.find(entry => entry.id === id);
       if (!order) throw new Error('Pedido não encontrado.');

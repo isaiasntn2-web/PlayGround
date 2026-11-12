@@ -656,7 +656,32 @@
     openInfo(trigger.dataset.info);
   });
 
+  function trapModalFocus(container, event) {
+    const focusables = [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(element => element.offsetParent !== null);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   document.addEventListener('keydown', event => {
+    if (event.key === 'Tab') {
+      const activeModal = infoElements?.modal.classList.contains('open') ? infoElements.modal
+        : checkoutElements?.modal.classList.contains('open') ? checkoutElements.modal
+        : authElements?.modal.classList.contains('open') ? authElements.modal
+        : null;
+      if (activeModal) {
+        trapModalFocus(activeModal, event);
+        return;
+      }
+    }
     if (event.key !== 'Escape') return;
     if (infoElements?.modal.classList.contains('open')) closeInfo();
     if (checkoutElements?.modal.classList.contains('open')) closeCheckout();

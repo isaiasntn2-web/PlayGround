@@ -358,12 +358,49 @@ button { cursor: pointer; }
 .settings-form { padding: 16px 17px; display: grid; grid-template-columns: 1fr 1fr; gap: 11px 12px; }
 .settings-form label { display: flex; flex-direction: column; gap: 5px; font: 7px var(--mono); color: var(--muted); letter-spacing: .035em; }
 .settings-form .span-2 { grid-column: span 2; }
-.settings-form input, .settings-form textarea {
+.settings-form input, .settings-form select, .settings-form textarea {
   border: 1px solid var(--line); background: var(--white); padding: 9px 10px; font: 11px var(--display);
-  outline: 0; border-radius: 0; width: 100%; color: var(--ink);
+  outline: 0; border-radius: 0; width: 100%; color: var(--ink); height: 35px;
 }
-.settings-form input:focus, .settings-form textarea:focus { border-color: var(--ink); }
+.settings-form textarea { height: auto; }
+.settings-form input:focus, .settings-form select:focus, .settings-form textarea:focus { border-color: var(--ink); }
 .settings-form textarea { min-height: 65px; resize: vertical; }
+.settings-form .form-checks { grid-column: span 2; display: flex; gap: 16px; flex-wrap: wrap; padding: 2px 0; }
+.settings-form .form-checks label { flex-direction: row; align-items: center; gap: 6px; font: 7.5px var(--mono); color: var(--ink); cursor: pointer; }
+.settings-form .form-checks input { width: 13px; height: 13px; accent-color: var(--red); }
+.coupon-form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.coupon-form-actions .admin-button { min-height: 32px; font-size: 7px; }
+.coupon-list { padding: 0 17px 16px; }
+.coupon-item {
+  display: grid; grid-template-columns: 1.3fr .9fr .55fr auto auto; align-items: center; gap: 9px;
+  padding: 10px 0; border-bottom: 1px solid #e9e6dd;
+}
+.coupon-item:last-child { border-bottom: 0; }
+.coupon-item.is-off { opacity: .5; }
+.coupon-code b { display: block; font: 500 11px var(--mono); letter-spacing: .02em; }
+.coupon-code span { display: block; font: 6.5px var(--mono); color: var(--muted); margin-top: 3px; text-transform: uppercase; }
+.coupon-meta { text-align: right; }
+.coupon-meta strong { display: block; font: 600 9px var(--display); }
+.coupon-meta span { display: block; font: 6px var(--mono); color: var(--muted); margin-top: 2px; }
+.coupon-uses { text-align: center; }
+.coupon-uses b { display: block; font: 600 12px var(--display); }
+.coupon-uses span { font: 6px var(--mono); color: var(--muted); }
+.tracking-form { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.tracking-form label { display: flex; align-items: center; gap: 7px; font: 7px var(--mono); color: var(--muted); }
+.tracking-form input {
+  border: 1px solid var(--line); background: var(--white); padding: 7px 9px; font: 9px var(--mono);
+  outline: 0; width: 150px; text-transform: uppercase;
+}
+.tracking-form input:focus { border-color: var(--ink); }
+.tracking-inline { display: block; margin-top: 4px; color: var(--ink); }
+@media (max-width: 560px) {
+  .coupon-item { grid-template-columns: 1fr 1fr auto; }
+  .coupon-meta { text-align: left; }
+  .coupon-uses { display: none; }
+  .coupon-item .row-actions { grid-column: span 3; justify-content: flex-end; }
+  .tracking-form { width: 100%; }
+  .tracking-form input { flex: 1; min-width: 0; }
+}
 .settings-actions { padding: 0 17px 16px; display: flex; align-items: center; gap: 10px; }
 .settings-message { font: 7.5px var(--mono); color: #5b621f; }
 .team-list { display: flex; flex-direction: column; padding: 5px 17px 10px; }

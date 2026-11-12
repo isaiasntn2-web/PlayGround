@@ -68,6 +68,8 @@
   function orderCard(order) {
     const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
     const discount = Number(order.discount) || 0;
+    const canCancel = ['pendente', 'pago'].includes(order.status);
+    const shipped = ['enviado', 'entregue'].includes(order.status);
     return `
       <article class="account-order">
         <div class="account-order-head">
@@ -78,6 +80,12 @@
           <span class="order-status ${esc(order.status)}">${statusLabels[order.status] || esc(order.status)}</span>
         </div>
         ${orderTracker(order)}
+        ${shipped && order.trackingCode ? `
+          <div class="order-tracking">
+            <span>CÓDIGO DE RASTREIO</span>
+            <b>${esc(order.trackingCode)}</b>
+            <button type="button" data-copy-tracking="${esc(order.trackingCode)}">COPIAR</button>
+          </div>` : ''}
         <div class="account-order-body">
           ${order.items.map(item => `
             <div class="account-order-item">
@@ -89,6 +97,10 @@
         <div class="account-order-foot">
           <span>${itemCount} ${itemCount === 1 ? 'PEÇA' : 'PEÇAS'} · FRETE ${order.shipping ? money(order.shipping) : 'GRÁTIS'}${order.coupon ? ` · CUPOM ${esc(order.coupon.code)}` : ''}</span>
           <span class="account-order-money">${discount > 0 ? `<small>DESCONTO -${money(discount)}</small>` : ''}<b>${money(order.total)}</b></span>
+        </div>
+        <div class="account-order-actions">
+          ${order.status !== 'cancelado' ? `<button class="account-reorder" type="button" data-reorder="${esc(order.id)}">COMPRAR NOVAMENTE <span>↗</span></button>` : ''}
+          ${canCancel ? `<button class="account-cancel" type="button" data-cancel-order="${esc(order.id)}">CANCELAR PEDIDO</button>` : ''}
         </div>
       </article>`;
   }
@@ -231,15 +243,84 @@
     }
   });
 
+  function copyTracking(code) {
+    const done = () => AuthUI.toast('CÓDIGO COPIADO ✳');
+    const fallback = () => {
+      const field = document.createElement('textarea');
+      field.value = code;
+      field.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+      document.body.append(field);
+      field.select();
+      document.execCommand('copy');
+      field.remove();
+      done();
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(fallback);
+      return;
+    }
+    fallback();
+  }
+
   document.querySelector('.account-content').addEventListener('click', event => {
     const remove = event.target.closest('[data-remove-favorite]');
-    if (!remove) return;
-    try {
-      RUA98.toggleFavorite(remove.dataset.removeFavorite);
-      AuthUI.toast('PEÇA REMOVIDA DOS FAVORITOS.');
-      renderAll();
-    } catch (error) {
-      AuthUI.toast(error.message.toUpperCase());
+    if (remove) {
+      try {
+        RUA98.toggleFavorite(remove.dataset.removeFavorite);
+        AuthUI.toast('PEÇA REMOVIDA DOS FAVORITOS.');
+        renderAll();
+      } catch (error) {
+        AuthUI.toast(error.message.toUpperCase());
+      }
+      return;
+    }
+
+    const trackingButton = event.target.closest('[data-copy-tracking]');
+    if (trackingButton) {
+      copyTracking(trackingButton.dataset.copyTracking);
+      return;
+    }
+
+    const reorderButton = event.target.closest('[data-reorder]');
+    if (reorderButton) {
+      try {
+        const result = RUA98.reorder(reorderButton.dataset.reorder);
+        if (!result.added) {
+          AuthUI.toast('AS PEÇAS DESSE PEDIDO NÃO ESTÃO DISPONÍVEIS.');
+          return;
+        }
+        AuthUI.toast(result.skipped
+          ? `${result.added} ITEM(NS) NA SACOLA · ${result.skipped} INDISPONÍVEL(IS)`
+          : `${result.added} ITEM(NS) NA SACOLA ✳`);
+        reorderButton.disabled = true;
+        setTimeout(() => { window.location.href = 'index.html?cart=1#colecao'; }, 650);
+      } catch (error) {
+        AuthUI.toast(error.message.toUpperCase());
+      }
+      return;
+    }
+
+    const cancelButton = event.target.closest('[data-cancel-order]');
+    if (cancelButton) {
+      if (cancelButton.dataset.confirm !== '1') {
+        cancelButton.dataset.confirm = '1';
+        cancelButton.textContent = 'CONFIRMAR CANCELAMENTO?';
+        cancelButton.classList.add('is-confirming');
+        setTimeout(() => {
+          if (!cancelButton.isConnected || cancelButton.dataset.confirm !== '1') return;
+          cancelButton.dataset.confirm = '';
+          cancelButton.textContent = 'CANCELAR PEDIDO';
+          cancelButton.classList.remove('is-confirming');
+        }, 4000);
+        return;
+      }
+      try {
+        RUA98.cancelMyOrder(cancelButton.dataset.cancelOrder);
+        AuthUI.toast('PEDIDO CANCELADO. ESTOQUE LIBERADO ✳');
+        renderAll();
+      } catch (error) {
+        AuthUI.toast(error.message.toUpperCase());
+      }
     }
   });
 

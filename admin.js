@@ -82,11 +82,11 @@
     $('#admin-user-name').textContent = me.name;
   }
 
-  function showLogin() {
+  function showLogin(reset = false) {
     me = null;
     loginScreen.hidden = false;
     app.hidden = true;
-    $('#admin-login-form').reset();
+    if (reset) $('#admin-login-form').reset();
     $('#login-error').hidden = true;
     updateLoginNote();
     closeSidebar();
@@ -586,7 +586,7 @@
       <div class="admin-panel">
         <div class="panel-heading">
           <div><h2>PEDIDOS<span>.</span></h2><p>ACOMPANHE E ATUALIZE CADA ENTREGA.</p></div>
-          <div class="panel-actions"><span class="table-count" id="orders-count"></span></div>
+          <div class="panel-actions"><button class="admin-button" type="button" data-action="export-orders">EXPORTAR CSV <span>↓</span></button><span class="table-count" id="orders-count"></span></div>
         </div>
         <div class="table-wrap">
           <div class="table-toolbar">
@@ -646,7 +646,7 @@
         </div>
         <div class="order-info-grid">
           <div class="order-info"><b>CLIENTE</b><span>${esc(order.userName)}<br>${esc(order.userEmail)}<br>${esc(order.customer.phone || 'Telefone não informado')}</span></div>
-          <div class="order-info"><b>ENTREGA</b><span>${esc(order.customer.address || 'Endereço não informado')}${order.customer.number ? `, ${esc(order.customer.number)}` : ''}<br>${esc(order.customer.city || '')}${order.customer.state ? ` · ${esc(order.customer.state)}` : ''}<br>${esc(order.customer.zip || '')}</span></div>
+          <div class="order-info"><b>ENTREGA</b><span>${esc(order.customer.address || 'Endereço não informado')}${order.customer.number ? `, ${esc(order.customer.number)}` : ''}<br>${esc(order.customer.city || '')}${order.customer.state ? ` · ${esc(order.customer.state)}` : ''}<br>${esc(order.customer.zip || '')}${order.trackingCode ? `<br><b class="tracking-inline">RASTREIO ${esc(order.trackingCode)}</b>` : ''}</span></div>
         </div>
         <div class="order-items">
           ${order.items.map(item => `
@@ -664,6 +664,10 @@
         </div>
       </div>
       <div class="order-detail-actions">
+        <form class="tracking-form" id="tracking-form" data-id="${esc(order.id)}">
+          <label>CÓDIGO DE RASTREIO<input name="tracking" value="${esc(order.trackingCode || '')}" placeholder="BR98 0000 0000" maxlength="40" autocomplete="off"></label>
+          <button class="admin-button small" type="submit">SALVAR RASTREIO</button>
+        </form>
         <label>ATUALIZAR STATUS <select class="status-select order-modal-status" data-id="${esc(order.id)}">${statusOptions(order.status)}</select></label>
         <button class="admin-button" type="button" data-close-modal>FECHAR</button>
       </div>`);
@@ -686,7 +690,7 @@
       <div class="admin-panel">
         <div class="panel-heading">
           <div><h2>CLIENTES<span>.</span></h2><p>QUEM VESTE A RUA 98.</p></div>
-          <div class="panel-actions"><span class="table-count" id="customers-count"></span></div>
+          <div class="panel-actions"><button class="admin-button" type="button" data-action="export-customers">EXPORTAR CSV <span>↓</span></button><span class="table-count" id="customers-count"></span></div>
         </div>
         <div class="table-wrap">
           <div class="table-toolbar">
@@ -777,6 +781,36 @@
   }
 
   /* ---------------- configurações ---------------- */
+  function couponValue(coupon) {
+    return coupon.type === 'fixed' ? money(coupon.value) : `${coupon.value}%`;
+  }
+
+  function renderCouponList() {
+    const coupons = RUA98.coupons({ includeInactive: true });
+    if (!coupons.length) return '<p class="security-note">NENHUM CUPOM CADASTRADO. CRIE O PRIMEIRO ACIMA.</p>';
+    return `
+      <div class="coupon-list">
+        ${coupons.map(coupon => {
+          const uses = RUA98.couponUsage(coupon.code);
+          return `
+            <div class="coupon-item${coupon.active ? '' : ' is-off'}">
+              <div class="coupon-code"><b>${esc(coupon.code)}</b><span>${esc(coupon.label)}</span></div>
+              <div class="coupon-meta">
+                <strong>${esc(couponValue(coupon))}</strong>
+                <span>${Number(coupon.minSubtotal) > 0 ? `MÍN. ${money(coupon.minSubtotal)}` : 'SEM MÍNIMO'}${coupon.oncePerUser ? ' · USO ÚNICO' : ''}</span>
+              </div>
+              <div class="coupon-uses"><b>${uses}</b><span>USO${uses === 1 ? '' : 'S'}</span></div>
+              <span class="badge ${coupon.active ? 'active' : 'inactive'}">${coupon.active ? 'ATIVO' : 'PAUSADO'}</span>
+              <div class="row-actions">
+                <button class="icon-action" type="button" data-action="edit-coupon" data-code="${esc(coupon.code)}" title="Editar cupom">✎</button>
+                <button class="icon-action" type="button" data-action="toggle-coupon" data-code="${esc(coupon.code)}" title="${coupon.active ? 'Pausar cupom' : 'Ativar cupom'}">${coupon.active ? '❚❚' : '▶'}</button>
+                <button class="icon-action danger" type="button" data-action="delete-coupon" data-code="${esc(coupon.code)}" title="Excluir cupom">×</button>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
   function renderSettings() {
     const settings = RUA98.settings();
     const admins = RUA98.users().filter(user => user.role === 'admin');
@@ -804,6 +838,27 @@
                 <button class="admin-button admin-button-dark" type="submit" form="settings-form">SALVAR CONFIGURAÇÕES <span>↗</span></button>
                 <span class="settings-message" id="settings-message" hidden></span>
               </div>
+            </div>
+            <div class="settings-card">
+              <div class="settings-card-head"><h3>Cupons de desconto</h3><p>CRIE E CONTROLE OS CÓDIGOS DA LOJA.</p></div>
+              <form class="settings-form coupon-form" id="coupon-form">
+                <input type="hidden" name="originalCode" value="">
+                <label>CÓDIGO<input name="code" placeholder="RUA10" maxlength="20" autocomplete="off" required></label>
+                <label>TIPO<select name="type"><option value="percent">PERCENTUAL (%)</option><option value="fixed">VALOR FIXO (R$)</option></select></label>
+                <label>VALOR<input name="value" type="number" min="0.01" step="0.01" placeholder="10" required></label>
+                <label>COMPRA MÍNIMA (R$)<input name="minSubtotal" type="number" min="0" step="0.01" value="0"></label>
+                <label class="span-2">DESCRIÇÃO<input name="label" placeholder="10% OFF NA PRIMEIRA COMPRA" maxlength="60"></label>
+                <div class="form-checks span-2">
+                  <label><input type="checkbox" name="active" checked> ATIVO</label>
+                  <label><input type="checkbox" name="oncePerUser" checked> USO ÚNICO POR CONTA</label>
+                </div>
+                <div class="coupon-form-actions span-2">
+                  <button class="admin-button admin-button-dark" type="submit">SALVAR CUPOM <span>↗</span></button>
+                  <button class="admin-button" type="button" data-action="cancel-coupon" hidden>CANCELAR EDIÇÃO</button>
+                  <span class="settings-message" id="coupon-message" hidden></span>
+                </div>
+              </form>
+              ${renderCouponList()}
             </div>
             <div class="settings-card">
               <div class="settings-card-head"><h3>Adicionar administrador</h3><p>CRIE UM NOVO ACESSO AO PAINEL.</p></div>
@@ -838,6 +893,7 @@
                 </div>
                 ${subscribers.length > 6 ? `<p class="security-note">E MAIS ${subscribers.length - 6} CONTATO(S) NA LISTA.</p>` : ''}`
                 : '<p class="security-note">NENHUM E-MAIL CADASTRADO AINDA. A LISTA É ALIMENTADA PELA NEWSLETTER DA VITRINE.</p>'}
+              <div class="data-actions"><button class="admin-button" type="button" data-action="export-newsletter" ${subscribers.length ? '' : 'disabled'}>EXPORTAR LISTA CSV <span>↓</span></button></div>
             </div>
             <div class="settings-card">
               <div class="settings-card-head"><h3>Dados da loja</h3><p>BACKUP E RESTAURAÇÃO</p></div>
@@ -892,16 +948,159 @@
     }
   }
 
-  function exportData() {
-    const blob = new Blob([RUA98.exportData()], { type: 'application/json' });
+  function fillCouponForm(code) {
+    const coupon = RUA98.coupons({ includeInactive: true }).find(entry => entry.code === code);
+    if (!coupon) return toast('CUPOM NÃO ENCONTRADO.');
+    const form = $('#coupon-form');
+    if (!form) return;
+    form.elements.originalCode.value = coupon.code;
+    form.elements.code.value = coupon.code;
+    form.elements.type.value = coupon.type;
+    form.elements.value.value = coupon.value;
+    form.elements.minSubtotal.value = coupon.minSubtotal || 0;
+    form.elements.label.value = coupon.label || '';
+    form.elements.active.checked = Boolean(coupon.active);
+    form.elements.oncePerUser.checked = Boolean(coupon.oncePerUser);
+    form.querySelector('[data-action="cancel-coupon"]').hidden = false;
+    form.querySelector('.admin-button-dark').innerHTML = 'ATUALIZAR CUPOM <span>↗</span>';
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.elements.code.focus({ preventScroll: true });
+  }
+
+  function submitCoupon(form) {
+    const message = $('#coupon-message');
+    if (message) message.hidden = true;
+    try {
+      const coupon = RUA98.saveCoupon({
+        originalCode: form.elements.originalCode.value,
+        code: form.elements.code.value,
+        type: form.elements.type.value,
+        value: form.elements.value.value,
+        minSubtotal: form.elements.minSubtotal.value,
+        label: form.elements.label.value,
+        active: form.elements.active.checked,
+        oncePerUser: form.elements.oncePerUser.checked
+      });
+      renderSettings();
+      const fresh = $('#coupon-message');
+      if (fresh) {
+        fresh.textContent = `CUPOM ${coupon.code} SALVO ✳`;
+        fresh.hidden = false;
+        setTimeout(() => { fresh.hidden = true; }, 3200);
+      }
+      toast(`CUPOM ${coupon.code} SALVO ✳`);
+    } catch (error) {
+      if (message) {
+        message.textContent = error.message.toUpperCase();
+        message.hidden = false;
+      }
+      toast(error.message.toUpperCase());
+    }
+  }
+
+  function deleteCoupon(code) {
+    confirmAction({
+      title: `EXCLUIR CUPOM ${esc(code)}`,
+      text: 'O código deixa de funcionar imediatamente. Pedidos já feitos com ele não são alterados.',
+      label: 'EXCLUIR CUPOM',
+      onConfirm: () => {
+        RUA98.deleteCoupon(code);
+        renderSettings();
+        toast(`CUPOM ${code} EXCLUÍDO.`);
+      }
+    });
+  }
+
+  function toggleCoupon(code) {
+    try {
+      const coupon = RUA98.toggleCoupon(code);
+      renderSettings();
+      toast(`CUPOM ${coupon.code} ${coupon.active ? 'ATIVADO' : 'PAUSADO'} ✳`);
+    } catch (error) {
+      toast(error.message.toUpperCase());
+    }
+  }
+
+  function saveTracking(form) {
+    try {
+      RUA98.updateOrderTracking(form.dataset.id, form.elements.tracking.value);
+      openOrderModal(form.dataset.id);
+      toast('CÓDIGO DE RASTREIO SALVO ✳');
+    } catch (error) {
+      toast(error.message.toUpperCase());
+    }
+  }
+
+  function csvCell(value) {
+    return `"${String(value ?? '').replace(/"/g, '""')}"`;
+  }
+
+  function downloadFile(filename, content, type) {
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'rua98-backup.json';
+    anchor.download = filename;
     document.body.append(anchor);
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadCSV(filename, headers, rows) {
+    const content = [headers, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n');
+    downloadFile(filename, `\uFEFF${content}`, 'text/csv;charset=utf-8');
+  }
+
+  function exportOrders() {
+    const orders = RUA98.orders();
+    downloadCSV('rua98-pedidos.csv',
+      ['PEDIDO', 'CLIENTE', 'E-MAIL', 'DATA', 'STATUS', 'ITENS', 'SUBTOTAL', 'DESCONTO', 'FRETE', 'TOTAL', 'CUPOM', 'RASTREIO'],
+      orders.map(order => [
+        order.number,
+        order.userName,
+        order.userEmail,
+        dateBR(order.createdAt),
+        statusLabels[order.status] || order.status,
+        order.items.reduce((sum, item) => sum + item.quantity, 0),
+        Number(order.subtotal || 0).toFixed(2).replace('.', ','),
+        Number(order.discount || 0).toFixed(2).replace('.', ','),
+        Number(order.shipping || 0).toFixed(2).replace('.', ','),
+        Number(order.total || 0).toFixed(2).replace('.', ','),
+        order.coupon ? order.coupon.code : '',
+        order.trackingCode || ''
+      ]));
+    toast(`${orders.length} PEDIDO(S) EXPORTADO(S) ✳`);
+  }
+
+  function exportCustomers() {
+    const customers = RUA98.users().filter(user => user.role === 'customer');
+    downloadCSV('rua98-clientes.csv',
+      ['NOME', 'E-MAIL', 'TELEFONE', 'CIDADE', 'UF', 'PEDIDOS', 'TOTAL GASTO', 'NA RUA DESDE', 'STATUS'],
+      customers.map(user => [
+        user.name,
+        user.email,
+        user.phone || '',
+        user.city || '',
+        user.state || '',
+        user.orders,
+        Number(user.spent || 0).toFixed(2).replace('.', ','),
+        dateBR(user.createdAt),
+        user.blocked ? 'BLOQUEADO' : 'ATIVO'
+      ]));
+    toast(`${customers.length} CLIENTE(S) EXPORTADO(S) ✳`);
+  }
+
+  function exportNewsletter() {
+    const subscribers = RUA98.newsletterSubscribers();
+    downloadCSV('rua98-newsletter.csv',
+      ['E-MAIL', 'DATA', 'ORIGEM'],
+      subscribers.map(entry => [entry.email, dateBR(entry.createdAt), entry.source || 'site']));
+    toast(`${subscribers.length} CONTATO(S) EXPORTADO(S) ✳`);
+  }
+
+  function exportData() {
+    downloadFile('rua98-backup.json', RUA98.exportData(), 'application/json');
     toast('BACKUP EXPORTADO ✳');
   }
 
@@ -996,7 +1195,7 @@
 
   $('#sidebar-logout').addEventListener('click', () => {
     RUA98.logout();
-    showLogin();
+    showLogin(true);
     toast('SESSÃO ENCERRADA.');
   });
 
@@ -1016,7 +1215,7 @@
   content.addEventListener('click', event => {
     const actionElement = event.target.closest('[data-action]');
     if (!actionElement) return;
-    const { action, id } = actionElement.dataset;
+    const { action, id, code } = actionElement.dataset;
     if (action === 'new-product') openProductModal();
     if (action === 'edit-product') openProductModal(id);
     if (action === 'delete-product') deleteProduct(id);
@@ -1032,6 +1231,13 @@
     if (action === 'go-orders') { state.panel = 'orders'; render(); window.scrollTo({ top: 0 }); }
     if (action === 'go-customers') { state.panel = 'customers'; render(); window.scrollTo({ top: 0 }); }
     if (action === 'export-data') exportData();
+    if (action === 'export-orders') exportOrders();
+    if (action === 'export-customers') exportCustomers();
+    if (action === 'export-newsletter') exportNewsletter();
+    if (action === 'edit-coupon') fillCouponForm(code);
+    if (action === 'delete-coupon') deleteCoupon(code);
+    if (action === 'toggle-coupon') toggleCoupon(code);
+    if (action === 'cancel-coupon') renderSettings();
     if (action === 'reset-demo') resetDemo();
   });
 
@@ -1061,6 +1267,7 @@
     event.preventDefault();
     if (event.target.id === 'settings-form') saveSettings(event.target);
     if (event.target.id === 'add-admin-form') addAdmin(event.target);
+    if (event.target.id === 'coupon-form') submitCoupon(event.target);
   });
 
   modalRoot.addEventListener('click', event => {
@@ -1081,6 +1288,7 @@
     if (event.target.id === 'product-form') submitProduct(event.target);
     if (event.target.id === 'drop-form') submitDrop(event.target);
     if (event.target.id === 'collection-form') submitCollection(event.target);
+    if (event.target.id === 'tracking-form') saveTracking(event.target);
   });
 
   modalRoot.addEventListener('input', event => {

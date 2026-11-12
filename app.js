@@ -7,6 +7,7 @@
   }[char]));
   const price = value => `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   const state = { category: 'todos', collection: 'todos', search: '', sort: 'featured', favoritesOnly: false };
+  const RECENT_KEY = 'rua98_recent_v1';
   const grid = document.querySelector('#product-grid');
   const filterList = document.querySelector('#filter-list');
   const collectionFilter = document.querySelector('#collection-filter');
@@ -15,10 +16,61 @@
   const resultsCount = document.querySelector('.results-count');
   const emptyProducts = document.querySelector('.empty-products');
   const drawer = document.querySelector('.cart-drawer');
+  const searchPanel = document.querySelector('.search-panel');
+  const searchInput = document.querySelector('#search-input');
+  const searchHint = document.querySelector('#search-hint');
+  const searchToggle = document.querySelector('.search-toggle');
+  const recentSection = document.querySelector('.recently-viewed');
+  const recentGrid = document.querySelector('#recent-grid');
   let productElements = null;
   let modalProductId = null;
   let modalSize = '';
   let modalTrigger = null;
+  let cartTrigger = null;
+
+  function copyText(text) {
+    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    document.body.append(field);
+    field.select();
+    document.execCommand('copy');
+    field.remove();
+    return Promise.resolve();
+  }
+
+  function recentIds() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+      return Array.isArray(saved) ? saved.filter(id => RUA98.product(id)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function rememberRecent(id) {
+    const list = recentIds().filter(entry => entry !== id);
+    list.unshift(id);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 4))); } catch { /* modo privado */ }
+    renderRecent();
+  }
+
+  function renderRecent() {
+    if (!recentSection || !recentGrid) return;
+    const products = recentIds().map(id => RUA98.product(id)).filter(product => product && product.active);
+    recentSection.hidden = products.length === 0;
+    recentGrid.innerHTML = products.map(product => `
+      <article class="recent-card">
+        <button class="recent-media" type="button" data-details="${esc(product.id)}" aria-label="Ver ${esc(product.name)}">
+          <img src="${esc(product.image)}" alt="${esc(product.name)}" loading="lazy">
+        </button>
+        <div class="recent-info">
+          <div><b>${esc(product.name)}</b><span>${esc(product.subtitle || product.meta)}</span></div>
+          <strong>${price(product.price)}</strong>
+        </div>
+      </article>`).join('');
+  }
 
   function applySettings() {
     const settings = RUA98.settings();
@@ -92,6 +144,7 @@
     const collection = RUA98.collection(product.collectionId);
     const tagClass = product.isNew ? 'tag-new' : /LIMITADA|ESGOTADO/.test(product.tag) ? 'tag-limited' : '';
     const soldOut = product.stock <= 0;
+    const lowStock = !soldOut && product.stock <= 8;
     return `
       <article class="product-card" data-category="${esc(product.category)}" data-collection="${esc(product.collectionId)}" data-id="${esc(product.id)}" data-name="${esc(product.name.toLowerCase())}">
         <div class="product-image">
@@ -100,6 +153,7 @@
           <button class="favorite-btn${favorite ? ' active' : ''}" data-favorite="${esc(product.id)}" aria-label="${favorite ? 'Remover dos favoritos' : 'Favoritar'} ${esc(product.name)}" aria-pressed="${favorite}">
             <svg viewBox="0 0 24 24"><path d="M20.8 8.7c0 5.2-8.8 10-8.8 10s-8.8-4.8-8.8-10a4.7 4.7 0 0 1 8.8-2.2 4.7 4.7 0 0 1 8.8 2.2Z"/></svg>
           </button>
+          ${lowStock ? `<span class="stock-flag">ÚLTIMAS ${product.stock}</span>` : ''}
           <button class="quick-add" data-product="${esc(product.id)}" ${soldOut ? 'disabled' : ''}>
             ${soldOut ? 'ESGOTADO' : 'ADICIONAR À SACOLA'} <span>${soldOut ? '×' : '＋'}</span>
           </button>
@@ -123,6 +177,11 @@
     grid.hidden = products.length === 0;
     const emptyText = emptyProducts.querySelector('.empty-text');
     if (emptyText) emptyText.textContent = state.favoritesOnly ? 'VOCÊ AINDA NÃO SALVOU NENHUMA PEÇA.' : 'NENHUMA PEÇA ENCONTRADA.';
+    if (searchHint) {
+      searchHint.textContent = state.search.trim()
+        ? `${products.length} ${products.length === 1 ? 'PEÇA ENCONTRADA' : 'PEÇAS ENCONTRADAS'}`
+        : '';
+    }
     if (favoritesToggle) {
       const favorites = activeProducts().filter(product => RUA98.isFavorite(product.id)).length;
       favoritesToggle.querySelector('.favorites-count').textContent = favorites;
@@ -167,13 +226,20 @@
   }
 
   function openCart() {
+    if (!document.body.classList.contains('cart-open')) cartTrigger = document.activeElement;
     document.body.classList.add('cart-open');
     drawer.setAttribute('aria-hidden', 'false');
+    document.querySelector('.cart-toggle').setAttribute('aria-expanded', 'true');
     document.querySelector('.close-drawer').focus();
   }
   function closeCart() {
     document.body.classList.remove('cart-open');
     drawer.setAttribute('aria-hidden', 'true');
+    document.querySelector('.cart-toggle').setAttribute('aria-expanded', 'false');
+    if (cartTrigger && cartTrigger.isConnected && typeof cartTrigger.focus === 'function') {
+      cartTrigger.focus({ preventScroll: true });
+    }
+    cartTrigger = null;
   }
 
   function openSizePicker(button) {
@@ -283,6 +349,19 @@
         }
         return;
       }
+      if (event.target.closest('[data-detail-share]')) {
+        const product = RUA98.product(modalProductId);
+        if (!product) return;
+        const url = `${location.origin}${location.pathname}#produto=${encodeURIComponent(product.id)}`;
+        if (navigator.share) {
+          navigator.share({ title: `${product.name} — RUA 98`, text: product.subtitle || '', url }).catch(() => {});
+          return;
+        }
+        copyText(url)
+          .then(() => AuthUI.toast('LINK DA PEÇA COPIADO ✳'))
+          .catch(() => AuthUI.toast(`COPIE: ${url}`));
+        return;
+      }
       const related = event.target.closest('[data-related]');
       if (related) openProductModal(related.dataset.related);
     });
@@ -330,7 +409,10 @@
             <button class="button button-dark product-detail-add" type="button" data-detail-add ${soldOut ? 'disabled' : ''}>${soldOut ? 'ESGOTADO' : 'ADICIONAR À SACOLA'} <span>${soldOut ? '×' : '↗'}</span></button>
             <button class="product-detail-favorite${favorite ? ' active' : ''}" type="button" data-detail-favorite aria-pressed="${favorite}">${favorite ? '♥ FAVORITADO' : '♡ FAVORITAR'}</button>
           </div>
-          <button class="size-guide-link" type="button" data-info="sizes">GUIA DE TAMANHOS <span>↗</span></button>
+          <div class="product-detail-links">
+            <button class="size-guide-link" type="button" data-info="sizes">GUIA DE TAMANHOS <span>↗</span></button>
+            <button class="size-guide-link" type="button" data-detail-share>COMPARTILHAR <span>↗</span></button>
+          </div>
           <div class="product-detail-trust">
             <span>✳ FRETE GRÁTIS ACIMA DE ${price(settings.freeShipping)}</span>
             <span>✳ TROCA EM ATÉ 30 DIAS</span>
@@ -352,7 +434,7 @@
     `;
   }
 
-  function openProductModal(id) {
+  function openProductModal(id, options = {}) {
     const product = RUA98.product(id);
     if (!product) return;
     document.querySelectorAll('.size-picker').forEach(picker => picker.remove());
@@ -366,21 +448,36 @@
     productElements.modal.classList.add('open');
     productElements.modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('product-open');
+    rememberRecent(product.id);
+    if (options.updateHash !== false) {
+      try { history.replaceState(null, '', `#produto=${encodeURIComponent(product.id)}`); } catch { /* ignora */ }
+    }
     requestAnimationFrame(() => productElements.modal.querySelector('.product-close')?.focus());
   }
 
   function closeProductModal() {
     if (!productElements) return;
+    const wasOpen = productElements.modal.classList.contains('open');
     productElements.scrim.classList.remove('open');
     productElements.modal.classList.remove('open');
     productElements.modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('product-open');
     modalProductId = null;
     modalSize = '';
-    if (modalTrigger && typeof modalTrigger.focus === 'function') {
-      modalTrigger.focus({ preventScroll: true });
-      modalTrigger = null;
+    if (wasOpen && location.hash.startsWith('#produto=')) {
+      try { history.replaceState(null, '', `${location.pathname}${location.search}#colecao`); } catch { /* ignora */ }
     }
+    if (modalTrigger && modalTrigger.isConnected && typeof modalTrigger.focus === 'function') {
+      modalTrigger.focus({ preventScroll: true });
+    }
+    modalTrigger = null;
+  }
+
+  function openProductFromHash() {
+    const match = location.hash.match(/^#produto=(.+)$/);
+    if (!match) return;
+    const id = decodeURIComponent(match[1]);
+    if (RUA98.product(id)) openProductModal(id, { updateHash: false });
   }
 
 
@@ -446,11 +543,40 @@
     renderCart();
   });
 
-  document.querySelector('.search-toggle').addEventListener('click', () => {
-    const panel = document.querySelector('.search-panel');
-    panel.classList.toggle('open');
-    if (panel.classList.contains('open')) document.querySelector('#search-input').focus();
+  searchToggle.addEventListener('click', () => {
+    const open = searchPanel.classList.toggle('open');
+    searchToggle.setAttribute('aria-expanded', String(open));
+    if (open) searchInput.focus();
   });
+  if (searchInput) {
+    searchInput.setAttribute('aria-controls', 'product-grid');
+    searchInput.setAttribute('aria-describedby', 'search-hint');
+  }
+  document.querySelectorAll('[data-search-term]').forEach(button => {
+    button.addEventListener('click', () => {
+      state.search = button.dataset.searchTerm;
+      state.category = 'todos';
+      state.collection = 'todos';
+      state.favoritesOnly = false;
+      searchInput.value = state.search;
+      collectionFilter.value = 'todos';
+      searchPanel.classList.remove('open');
+      searchToggle.setAttribute('aria-expanded', 'false');
+      renderProducts();
+      document.querySelector('#colecao').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+  if (recentGrid) {
+    recentGrid.addEventListener('click', event => {
+      const trigger = event.target.closest('[data-details]');
+      if (trigger) openProductModal(trigger.dataset.details);
+    });
+    document.querySelector('.recently-clear')?.addEventListener('click', () => {
+      localStorage.removeItem(RECENT_KEY);
+      renderRecent();
+      AuthUI.toast('HISTÓRICO LIMPO.');
+    });
+  }
   if (favoritesToggle) {
     favoritesToggle.addEventListener('click', () => {
       state.favoritesOnly = !state.favoritesOnly;
@@ -487,13 +613,45 @@
     document.querySelector('.menu-toggle').setAttribute('aria-expanded', 'false');
   }));
 
+  function trapFocus(container, event) {
+    const focusables = [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(element => element.offsetParent !== null);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   document.addEventListener('keydown', event => {
+    if (event.key === 'Tab') {
+      if (document.querySelector('.info-modal.open, .checkout-modal.open, .auth-modal.open')) return;
+      if (productElements?.modal.classList.contains('open')) return trapFocus(productElements.modal, event);
+      if (document.body.classList.contains('cart-open')) return trapFocus(drawer, event);
+    }
+    if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const tag = document.activeElement?.tagName || '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || document.activeElement?.isContentEditable) return;
+      if (document.querySelector('.info-modal.open, .checkout-modal.open, .auth-modal.open')) return;
+      event.preventDefault();
+      searchPanel.classList.add('open');
+      searchToggle.setAttribute('aria-expanded', 'true');
+      searchInput.focus();
+      return;
+    }
     if (event.key === 'Escape') {
-      if (document.querySelector('.info-modal.open')) return;
+      if (document.querySelector('.info-modal.open, .checkout-modal.open, .auth-modal.open')) return;
       closeCart();
       closeProductModal();
-      document.querySelector('.search-panel').classList.remove('open');
+      searchPanel.classList.remove('open');
+      searchToggle.setAttribute('aria-expanded', 'false');
       document.querySelector('.main-nav').classList.remove('open');
+      document.querySelector('.menu-toggle').setAttribute('aria-expanded', 'false');
       document.querySelectorAll('.size-picker').forEach(picker => picker.remove());
     }
   });
@@ -514,15 +672,32 @@
   window.addEventListener('rua98:auth', () => {
     renderProducts();
     renderCart();
+    renderRecent();
   });
   window.addEventListener('rua98:data', () => {
     renderFilters();
     renderProducts();
     renderCart();
+    renderRecent();
   });
 
   applySettings();
   renderProducts();
   renderCart();
+  renderRecent();
   AuthUI.refreshHeader();
+  openProductFromHash();
+  window.addEventListener('hashchange', openProductFromHash);
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('cart') === '1') {
+    const cart = RUA98.cart();
+    const clean = new URL(location.href);
+    clean.searchParams.delete('cart');
+    try { history.replaceState(null, '', `${clean.pathname}${clean.search}${clean.hash}`); } catch { /* ignora */ }
+    if (cart.count > 0) {
+      openCart();
+      AuthUI.toast('SACOLA ATUALIZADA ✳');
+    }
+  }
 })();
