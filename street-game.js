@@ -435,7 +435,7 @@
       for (let index = 0; index < 3; index += 1) {
         patches.push({
           x: W + 24 + index * 40,
-          y: ground - (high ? 108 + (index === 1 ? 20 : 0) : 47),
+          y: ground - (high ? 155 + (index === 1 ? 20 : 0) : 47),
           width: 27,
           height: 27,
           spin: Math.random() * Math.PI,
@@ -445,7 +445,7 @@
     }
     patches.push({
       x: W + 24,
-      y: ground - (high ? 119 : 47),
+      y: ground - (high ? 155 : 47),
       width: 27,
       height: 27,
       spin: Math.random() * Math.PI,
@@ -517,7 +517,7 @@
       spawnPower -= dt;
       if (spawnPower <= 0) {
         const kind = Math.random() < 0.56 ? 'shield' : 'clock';
-        powerups.push({ x: W + 26, y: ground - 132, width: 32, height: 32, kind, bob: Math.random() * Math.PI * 2 });
+        powerups.push({ x: W + 26, y: ground - 155, width: 32, height: 32, kind, bob: Math.random() * Math.PI * 2 });
         spawnPower = 10.5 + Math.random() * 6;
       }
 
@@ -1012,6 +1012,8 @@
   }
 
   function keyControl(event, pressed) {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
     const key = event.key.toLowerCase();
     const isMoveKey = ['arrowleft', 'a', 'arrowright', 'd', 'arrowup', 'w', ' '].includes(key);
     const isPauseKey = key === 'p' || key === 'escape';
@@ -1119,6 +1121,11 @@
         get score() { return score; },
         get lives() { return lives; },
         get combo() { return combo; },
+        get shield() { return shield; },
+        get timeLeft() { return Math.max(0, DURATION - elapsed + bonusTime); },
+        get patches() { return patches.map(patch => ({ ...patch })); },
+        get obstacles() { return obstacles.map(obstacle => ({ ...obstacle })); },
+        get powerups() { return powerups.map(powerup => ({ ...powerup })); },
         get playerY() { return player.y; },
         get playerX() { return player.x; },
         get onGround() { return player.onGround; },

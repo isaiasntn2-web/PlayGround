@@ -338,6 +338,15 @@
     min-height: 45px;
   }
 }
+@media(pointer:coarse),(any-pointer:coarse) {
+  .game-controls {
+    display: grid;
+  }
+  .game-overlay .button,
+  .game-controls button {
+    min-height: 44px;
+  }
+}
 @media(prefers-reduced-motion:reduce) {
   #game-time.is-urgent {
     animation: none;
