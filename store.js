@@ -74,6 +74,15 @@
           active: true,
           minSubtotal: 0,
           oncePerUser: true
+        },
+        {
+          code: 'NIGHTRUN15',
+          type: 'percent',
+          value: 15,
+          label: 'PRÊMIO NIGHT RUN · 15% OFF',
+          active: true,
+          minSubtotal: 0,
+          oncePerUser: true
         }
       ]
     };
@@ -673,6 +682,25 @@
     couponUsage(code) {
       const normalized = String(code || '').toUpperCase();
       return db.orders.filter(order => order.status !== 'cancelado' && order.coupon && order.coupon.code === normalized).length;
+    },
+    unlockGameReward() {
+      const code = 'NIGHTRUN15';
+      const coupons = db.settings.coupons || (db.settings.coupons = []);
+      let coupon = coupons.find(entry => entry.code === code);
+      if (!coupon) {
+        coupon = {
+          code,
+          type: 'percent',
+          value: 15,
+          label: 'PRÊMIO NIGHT RUN · 15% OFF',
+          active: true,
+          minSubtotal: 0,
+          oncePerUser: true
+        };
+        coupons.push(coupon);
+        persist();
+      }
+      return copy(coupon);
     },
     saveCoupon(input) {
       const code = String(input.code || '').trim().toUpperCase().replace(/\s+/g, '');

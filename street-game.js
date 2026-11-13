@@ -17,6 +17,10 @@
   const resetButton = document.querySelector('#game-reset');
   const pauseButton = document.querySelector('#game-pause');
   const soundButton = document.querySelector('#game-sound');
+  const fullscreenButton = document.querySelector('#game-fullscreen');
+  const rewardPanel = document.querySelector('#game-reward');
+  const rewardCode = document.querySelector('#game-reward-code');
+  const rewardCopy = document.querySelector('#game-reward-copy');
   const statusLabel = document.querySelector('#game-status');
   const overlayKicker = document.querySelector('#overlay-kicker');
   const overlayTitle = document.querySelector('#overlay-title');
@@ -244,6 +248,86 @@
     document.querySelectorAll('.game-controls button').forEach(button => button.classList.remove('is-pressed'));
   }
 
+  function hideGameReward() {
+    if (rewardPanel) rewardPanel.hidden = true;
+  }
+
+  function showGameReward() {
+    if (!rewardPanel || !rewardCode) return;
+    rewardPanel.hidden = false;
+    if (rewardCopy) rewardCopy.textContent = 'COPIAR CUPOM ↗';
+    const store = window.RUA98;
+    if (store && typeof store.ready === 'function' && typeof store.unlockGameReward === 'function') {
+      Promise.resolve(store.ready())
+        .then(() => store.unlockGameReward())
+        .then(coupon => {
+          if (coupon && coupon.code) rewardCode.textContent = coupon.code;
+        })
+        .catch(() => {
+          /* The coupon is a bonus; the run still ends normally if storage fails. */
+        });
+    }
+  }
+
+  async function copyGameReward() {
+    if (!rewardCode || !rewardCopy) return;
+    const code = rewardCode.textContent.trim();
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code);
+        copied = true;
+      }
+    } catch (error) {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(rewardCode);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } catch (error) {
+        /* Selection is a fallback for browsers without clipboard access. */
+      }
+    }
+    rewardCopy.textContent = copied ? 'COPIADO ✓' : 'USE O CÓDIGO';
+    setStatus(copied ? `Cupom ${code} copiado.` : `Use o cupom ${code} no checkout.`);
+    window.setTimeout(() => {
+      if (rewardCopy) rewardCopy.textContent = 'COPIAR CUPOM ↗';
+    }, 2400);
+  }
+
+  function fullscreenActive() {
+    return document.fullscreenElement === shell || document.webkitFullscreenElement === shell;
+  }
+
+  function updateFullscreenButton() {
+    if (!fullscreenButton) return;
+    const active = fullscreenActive();
+    fullscreenButton.textContent = active ? 'SAIR DA TELA ⤡' : 'TELA CHEIA ⤢';
+    fullscreenButton.setAttribute('aria-pressed', String(active));
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (fullscreenActive()) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        setStatus('Tela cheia encerrada.');
+      } else if (shell.requestFullscreen) {
+        await shell.requestFullscreen();
+        setStatus('Tela cheia. Vire o celular para jogar maior.');
+      } else if (shell.webkitRequestFullscreen) {
+        shell.webkitRequestFullscreen();
+        setStatus('Tela cheia. Vire o celular para jogar maior.');
+      }
+    } catch (error) {
+      setStatus('Este navegador não liberou a tela cheia.');
+    }
+  }
+
   function resetRound() {
     elapsed = 0;
     bonusTime = 0;
@@ -274,6 +358,7 @@
     held.left = false;
     held.right = false;
     clearPressedControls();
+    hideGameReward();
     updateHud();
   }
 
@@ -342,7 +427,9 @@
     if (won) {
       addBurst(player.x + player.width / 2, player.y + player.height / 2, ['#d6e363', '#f2f0e9', '#e44d32'], 42, 240);
       sfx.win();
+      showGameReward();
     } else {
+      hideGameReward();
       sfx.lose();
     }
 
@@ -357,7 +444,7 @@
     if (won) {
       kicker = 'ENTREGA CONCLUÍDA';
       title = 'ENTREGA<br>FEITA!';
-      copy = `Você levou os ${TARGET} patches em ${Math.max(1, Math.round(elapsed))}s.${recordLine}<br>Rua é movimento!`;
+      copy = `Você levou os ${TARGET} patches em ${Math.max(1, Math.round(elapsed))}s.${recordLine}<br>Prêmio liberado: 15% OFF na próxima compra.`;
     } else if (reason === 'time') {
       kicker = 'TEMPO ESGOTADO';
       title = 'O TEMPO<br>FECHOU.';
@@ -1061,6 +1148,13 @@
       sfx.pickup();
     }
   });
+  if (fullscreenButton) {
+    if (!shell.requestFullscreen && !shell.webkitRequestFullscreen) fullscreenButton.hidden = true;
+    else fullscreenButton.addEventListener('click', toggleFullscreen);
+  }
+  if (rewardCopy) rewardCopy.addEventListener('click', copyGameReward);
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
   canvas.addEventListener('pointerdown', () => canvas.focus({ preventScroll: true }));
 
   document.querySelectorAll('.game-controls button').forEach(button => {
@@ -1106,6 +1200,7 @@
 
   soundButton.textContent = `SOM: ${soundOn ? 'ON' : 'OFF'}`;
   soundButton.setAttribute('aria-pressed', String(soundOn));
+  updateFullscreenButton();
   updateHud();
   updatePauseButton();
   resizeCanvas();
@@ -1122,6 +1217,12 @@
         get playerY() { return player.y; },
         get playerX() { return player.x; },
         get onGround() { return player.onGround; },
+        get elapsed() { return elapsed; },
+        get shield() { return shield; },
+        get obstacles() { return obstacles.map(obstacle => ({ x: obstacle.x, y: obstacle.y, width: obstacle.width, height: obstacle.height })); },
+        get patches() { return patches.map(patch => ({ x: patch.x, y: patch.y, width: patch.width, height: patch.height })); },
+        get powerups() { return powerups.map(powerup => ({ x: powerup.x, y: powerup.y, width: powerup.width, height: powerup.height, kind: powerup.kind })); },
+        jump,
         start: startGame,
         pause: pauseGame,
         resume: resumeGame,
